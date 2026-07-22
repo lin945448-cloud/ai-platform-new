@@ -4,11 +4,12 @@ import { Bot, Sparkles, RotateCcw } from 'lucide-react';
 
 interface Props {
   data: ParsedData;
+  selectedCommercial: string; // 新增接收参数
   selectedBrand: string;
   selectedMonth: string;
 }
 
-export const AIPanel: React.FC<Props> = ({ data, selectedBrand, selectedMonth }) => {
+export const AIPanel: React.FC<Props> = ({ data, selectedCommercial, selectedBrand, selectedMonth }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -18,12 +19,18 @@ export const AIPanel: React.FC<Props> = ({ data, selectedBrand, selectedMonth })
   }, [messages, isTyping]);
 
   const handleGenerateReport = async () => {
-    const records = data.records.filter(r => 
-      (selectedBrand === '全部' || r.reportedBrand === selectedBrand) &&
-      (selectedMonth === '全部' || r.month === selectedMonth)
-    );
+    // 1. 严格按照三个筛选器进行数据过滤！
+    const records = data.records.filter(r => {
+      const isCom = (r as any).isCommercial;
+      const matchCom = selectedCommercial === '全部' || isCom === selectedCommercial;
+      const matchBrand = selectedBrand === '全部' || r.reportedBrand === selectedBrand;
+      const matchMonth = selectedMonth === '全部' || r.month === selectedMonth;
+      return matchCom && matchBrand && matchMonth;
+    });
+    
     if (records.length === 0) return;
 
+    // 2. 为 AI 计算所需的核心数据弹药
     const cost = records.reduce((s, r) => s + r.estimatedCost, 0);
     const interactions = records.reduce((s, r) => s + r.interactions, 0);
     const uniqueCreators = Array.from(new Map(records.map(r => [r.influencerId, r])).values());
@@ -31,19 +38,33 @@ export const AIPanel: React.FC<Props> = ({ data, selectedBrand, selectedMonth })
     const cpe = interactions > 0 ? (cost / interactions).toFixed(2) : 0;
     const cpf = totalFollowers > 0 ? (cost / totalFollowers).toFixed(2) : 0;
     
+    // 计算视频图文比例
+    let videoCount = 0; let imageCount = 0;
+    records.forEach(r => r.noteForm.includes('视频') ? videoCount++ : imageCount++);
+    
+    // 计算复投达人数
+    const creatorMap = new Map<string, number>();
+    records.forEach(r => creatorMap.set(r.influencerId, (creatorMap.get(r.influencerId) || 0) + 1));
+    const repeatedCount = Array.from(creatorMap.values()).filter(c => c > 1).length;
+
     const tags = Array.from(new Set(records.map(r => r.tags).filter(Boolean).map(t => t.split(',')[0]))).slice(0, 15).join('、');
     const topRecord = records.reduce((p, c) => p.interactions > c.interactions ? p : c);
 
+    // 3. 将计算好的弹药注入史诗级 Prompt
     const prompt = `
-当前分析切片：【品牌：${selectedBrand}】 | 【月份：${selectedMonth}】
-基础数据：共计 ${records.length} 篇笔记，总预估花费 ¥${cost}。
-达人数据：共 ${uniqueCreators.length} 位达人，总粉丝数 ${totalFollowers}。单粉成本(CPF)约 ¥${cpf}，单互动成本(CPE)约 ¥${cpe}。
-高频达人标签：${tags}
+筛选条件：【品牌：${selectedBrand}】 | 【月份：${selectedMonth}】 | 【性质：${selectedCommercial === '全部' ? '全部笔记' : selectedCommercial === '是' ? '仅商业笔记' : '仅非商业笔记'}】
+
+基础数据池：
+- 共计 ${records.length} 篇笔记，其中视频 ${videoCount} 支，图文 ${imageCount} 篇。
+- 总预估花费 ¥${cost}。
+- 共有 ${uniqueCreators.length} 位达人，其中复投达人 ${repeatedCount} 位。
+- 单粉成本(CPF)约 ¥${cpf}，单次互动成本(CPE)约 ¥${cpe}。
+- 高频达人标签：${tags}
 
 爆款笔记特征：
 - 标题: ${topRecord.title}
-- 达人属性: ${topRecord.influencerType} (粉丝:${topRecord.followers})
-- 笔记类型: ${topRecord.noteType} / 形式: ${topRecord.noteForm}
+- 达人: ${topRecord.influencerType} (粉丝:${topRecord.followers})
+- 形式: ${topRecord.noteType} / ${topRecord.noteForm}
 - 互动量: ${topRecord.interactions}
 
 请根据以上真实数据，输出商业洞察报告，必须包含以下6个模块（请严格使用 ### 作为主标题，- 作为列表）：
@@ -68,7 +89,7 @@ export const AIPanel: React.FC<Props> = ({ data, selectedBrand, selectedMonth })
 
 【要求】：所有结论必须引用具体数据。`;
 
-    setMessages([{ role: 'user', content: `请基于当前筛选生成深度商业分析报告。`, timestamp: new Date() }]);
+    setMessages([{ role: 'user', content: `请基于当前筛选（${selectedBrand} / ${selectedMonth} / ${selectedCommercial==='全部'?'全部笔记':selectedCommercial==='是'?'仅商业笔记':'非商业'}）生成深度分析报告。`, timestamp: new Date() }]);
     setIsTyping(true);
 
     try {
@@ -88,24 +109,17 @@ export const AIPanel: React.FC<Props> = ({ data, selectedBrand, selectedMonth })
     }
   };
 
-  // 极限版原生 Markdown 渲染器，拦截所有可能捣乱的符号！
   const renderMessage = (content: string) => {
-    // 强制清除无用的横线 --- 或 ====
     const cleanContent = content.replace(/---+/g, '').replace(/===+/g, '');
-
     return cleanContent.split('\n').map((line, i) => {
       const trimmed = line.trim();
       if (!trimmed) return <div key={i} className="h-1.5"></div>;
 
-      // 解析 **加粗** 的函数
       const parseBold = (text: string) => {
         const parts = text.split(/(\*\*.*?\*\*)/g);
-        return parts.map((p, j) => 
-          p.startsWith('**') ? <strong key={j} className="text-indigo-600 font-bold">{p.replace(/\*\*/g, '')}</strong> : p
-        );
+        return parts.map((p, j) => p.startsWith('**') ? <strong key={j} className="text-indigo-600 font-bold">{p.replace(/\*\*/g, '')}</strong> : p);
       };
 
-      // 强力拦截各种标题符号 (###, ##, #)
       const matchHeading = trimmed.match(/^(#{1,3})\s+(.*)/);
       if (matchHeading) {
         return (
@@ -115,22 +129,12 @@ export const AIPanel: React.FC<Props> = ({ data, selectedBrand, selectedMonth })
         );
       }
 
-      // 强力拦截列表符号 (- 或 *)，注意处理 "* **内容**:" 这种双重变体
       const matchList = trimmed.match(/^[\*\-]\s+(.*)/);
       if (matchList) {
-        return (
-          <li key={i} className="ml-4 list-disc marker:text-indigo-400 mb-1 text-[13px] text-slate-700 leading-relaxed">
-            {parseBold(matchList[1])}
-          </li>
-        );
+        return <li key={i} className="ml-4 list-disc marker:text-indigo-400 mb-1 text-[13px] text-slate-700 leading-relaxed">{parseBold(matchList[1])}</li>;
       }
 
-      // 处理其他普通段落
-      return (
-        <p key={i} className="mb-1 text-[13px] text-slate-700 leading-relaxed">
-          {parseBold(trimmed)}
-        </p>
-      );
+      return <p key={i} className="mb-1 text-[13px] text-slate-700 leading-relaxed">{parseBold(trimmed)}</p>;
     });
   };
 
@@ -156,7 +160,7 @@ export const AIPanel: React.FC<Props> = ({ data, selectedBrand, selectedMonth })
           <div className="flex flex-col items-center justify-center h-full text-center px-4">
             <Bot size={40} className="text-violet-200 mb-3" />
             <p className="text-sm font-bold text-slate-700 mb-1">全新 AI 分析引擎已就绪</p>
-            <p className="text-[11px] text-slate-500 mb-4 max-w-[200px]">已装载最新版达人采购、内容运营及 ROI 战略分析框架</p>
+            <p className="text-[11px] text-slate-500 mb-4 max-w-[200px]">已联动左侧所有条件筛选及数据计算结果</p>
             <button
               onClick={handleGenerateReport}
               disabled={data.totalNotes === 0}
@@ -184,7 +188,7 @@ export const AIPanel: React.FC<Props> = ({ data, selectedBrand, selectedMonth })
               <div className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce" />
               <div className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '150ms' }} />
               <div className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '300ms' }} />
-              <span className="text-[11px] text-slate-400 ml-2">DeepSeek 模型深度拆解中...</span>
+              <span className="text-[11px] text-slate-400 ml-2">模型推理中，预计需要 15 秒...</span>
             </div>
           </div>
         )}
