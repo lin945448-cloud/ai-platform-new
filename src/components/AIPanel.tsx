@@ -4,7 +4,7 @@ import { Bot, Sparkles, RotateCcw } from 'lucide-react';
 
 interface Props {
   data: ParsedData;
-  selectedCommercial: string; // 新增接收参数
+  selectedCommercial: string;
   selectedBrand: string;
   selectedMonth: string;
 }
@@ -19,7 +19,7 @@ export const AIPanel: React.FC<Props> = ({ data, selectedCommercial, selectedBra
   }, [messages, isTyping]);
 
   const handleGenerateReport = async () => {
-    // 1. 严格按照三个筛选器进行数据过滤！
+    // 真正用到了全部 3 个筛选条件！
     const records = data.records.filter(r => {
       const isCom = (r as any).isCommercial;
       const matchCom = selectedCommercial === '全部' || isCom === selectedCommercial;
@@ -30,7 +30,6 @@ export const AIPanel: React.FC<Props> = ({ data, selectedCommercial, selectedBra
     
     if (records.length === 0) return;
 
-    // 2. 为 AI 计算所需的核心数据弹药
     const cost = records.reduce((s, r) => s + r.estimatedCost, 0);
     const interactions = records.reduce((s, r) => s + r.interactions, 0);
     const uniqueCreators = Array.from(new Map(records.map(r => [r.influencerId, r])).values());
@@ -50,18 +49,17 @@ export const AIPanel: React.FC<Props> = ({ data, selectedCommercial, selectedBra
     const tags = Array.from(new Set(records.map(r => r.tags).filter(Boolean).map(t => t.split(',')[0]))).slice(0, 15).join('、');
     const topRecord = records.reduce((p, c) => p.interactions > c.interactions ? p : c);
 
-    // 3. 将计算好的弹药注入史诗级 Prompt
     const prompt = `
-筛选条件：【品牌：${selectedBrand}】 | 【月份：${selectedMonth}】 | 【性质：${selectedCommercial === '全部' ? '全部笔记' : selectedCommercial === '是' ? '仅商业笔记' : '仅非商业笔记'}】
+筛选视角：【品牌：${selectedBrand}】 | 【月份：${selectedMonth}】 | 【性质：${selectedCommercial==='全部'?'全部笔记':selectedCommercial==='是'?'仅商业笔记':'非商业'}】
 
-基础数据池：
-- 共计 ${records.length} 篇笔记，其中视频 ${videoCount} 支，图文 ${imageCount} 篇。
+客观数据指标（请在报告中引用以下数据）：
+- 共 ${records.length} 篇笔记，其中视频 ${videoCount} 支，图文 ${imageCount} 篇。
 - 总预估花费 ¥${cost}。
 - 共有 ${uniqueCreators.length} 位达人，其中复投达人 ${repeatedCount} 位。
 - 单粉成本(CPF)约 ¥${cpf}，单次互动成本(CPE)约 ¥${cpe}。
-- 高频达人标签：${tags}
+- 高频达人标签聚类：${tags}
 
-爆款笔记特征：
+爆款笔记特征分析用：
 - 标题: ${topRecord.title}
 - 达人: ${topRecord.influencerType} (粉丝:${topRecord.followers})
 - 形式: ${topRecord.noteType} / ${topRecord.noteForm}
@@ -70,26 +68,24 @@ export const AIPanel: React.FC<Props> = ({ data, selectedCommercial, selectedBra
 请根据以上真实数据，输出商业洞察报告，必须包含以下6个模块（请严格使用 ### 作为主标题，- 作为列表）：
 
 ### 1. 达人采购策略
-分析粉丝层级、等级分布、标签聚类、是否偏腰部/复投。判断品牌更偏向：ROI效率型/曝光型/矩阵铺量型/精准垂直型（必须给出证据）。
+分析粉丝层级、标签聚类、是否偏腰部/复投。判断品牌偏向：ROI效率型/曝光型/矩阵铺量型/垂直型（必须给出证据）。
 
 ### 2. 内容分析
-分析视频图文比例、标题风格（情绪/生活/种草）、场景关键词。判断品牌是在做：生活方式包装/功能教育/节点营销/搜索SEO型/爆款冲刺。
+分析视频图文比例、标题风格（情绪/生活/种草）、场景。判断品牌打法：生活方式/功能教育/节点营销/SEO/爆款冲刺。
 
 ### 3. 预算与ROI结构
-分析单粉成本、单互动成本等。判断品牌是否在控制成本？是否存在预算浪费或高价低效达人？
+分析CPF、CPE等。品牌是否在控制成本？是否存在浪费？
 
 ### 4. 内容效果结构
-分析高互动内容和低效内容并解释原因。
+分析高互动内容并解释原因。
 
 ### 5. 品牌打法推测
-判断品牌更接近哪种打法（曝光型/达人矩阵型/内容种草型/搜索SEO型/节点营销型/新品测试型/长期养号型/ROI效率型），写清依据。
+判断品牌接近哪种打法（曝光型/矩阵型/内容种草型/SEO型/节点营销/长期养号/ROI效率型），写清依据。
 
 ### 6. 机会与行动建议
-给出具体可执行建议：优先合作哪类达人？哪类性价比高/价格虚高？未覆盖场景？值得强化形式？复投建议？
+具体可执行建议：优先合作哪类达人？复投建议？内容形式建议？`;
 
-【要求】：所有结论必须引用具体数据。`;
-
-    setMessages([{ role: 'user', content: `请基于当前筛选（${selectedBrand} / ${selectedMonth} / ${selectedCommercial==='全部'?'全部笔记':selectedCommercial==='是'?'仅商业笔记':'非商业'}）生成深度分析报告。`, timestamp: new Date() }]);
+    setMessages([{ role: 'user', content: `基于筛选（${selectedCommercial==='全部'?'全部':selectedCommercial==='是'?'商业':'非商业'}）生成分析。`, timestamp: new Date() }]);
     setIsTyping(true);
 
     try {
@@ -147,7 +143,7 @@ export const AIPanel: React.FC<Props> = ({ data, selectedCommercial, selectedBra
           </div>
           <div>
             <h2 className="text-sm font-bold text-slate-800">DeepSeek 商业洞察大脑</h2>
-            <p className="text-[10px] text-slate-400">结合全盘数据深度推理 · 拒绝空泛</p>
+            <p className="text-[10px] text-slate-400">联动左侧面板数据动态推理</p>
           </div>
         </div>
         {messages.length > 0 && (
@@ -159,14 +155,14 @@ export const AIPanel: React.FC<Props> = ({ data, selectedCommercial, selectedBra
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center px-4">
             <Bot size={40} className="text-violet-200 mb-3" />
-            <p className="text-sm font-bold text-slate-700 mb-1">全新 AI 分析引擎已就绪</p>
-            <p className="text-[11px] text-slate-500 mb-4 max-w-[200px]">已联动左侧所有条件筛选及数据计算结果</p>
+            <p className="text-sm font-bold text-slate-700 mb-1">AI 引擎准备就绪</p>
+            <p className="text-[11px] text-slate-500 mb-4 max-w-[200px]">当前会准确读取【商业笔记】及【复投达人】等深度数据</p>
             <button
               onClick={handleGenerateReport}
               disabled={data.totalNotes === 0}
               className="flex items-center gap-2 bg-slate-800 hover:bg-slate-900 disabled:bg-slate-300 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition-all shadow-md active:scale-95"
             >
-              <Sparkles size={16} /> 提取核心数据并生成报告
+              <Sparkles size={16} /> 生成深度报告
             </button>
           </div>
         )}
@@ -188,7 +184,7 @@ export const AIPanel: React.FC<Props> = ({ data, selectedCommercial, selectedBra
               <div className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce" />
               <div className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '150ms' }} />
               <div className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '300ms' }} />
-              <span className="text-[11px] text-slate-400 ml-2">模型推理中，预计需要 15 秒...</span>
+              <span className="text-[11px] text-slate-400 ml-2">DeepSeek 模型深度拆解中...</span>
             </div>
           </div>
         )}
