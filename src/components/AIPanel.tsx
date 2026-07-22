@@ -24,7 +24,6 @@ export const AIPanel: React.FC<Props> = ({ data, selectedBrand, selectedMonth })
     );
     if (records.length === 0) return;
 
-    // 为 AI 准备极限详实的数据弹药
     const cost = records.reduce((s, r) => s + r.estimatedCost, 0);
     const interactions = records.reduce((s, r) => s + r.interactions, 0);
     const uniqueCreators = Array.from(new Map(records.map(r => [r.influencerId, r])).values());
@@ -35,7 +34,6 @@ export const AIPanel: React.FC<Props> = ({ data, selectedBrand, selectedMonth })
     const tags = Array.from(new Set(records.map(r => r.tags).filter(Boolean).map(t => t.split(',')[0]))).slice(0, 15).join('、');
     const topRecord = records.reduce((p, c) => p.interactions > c.interactions ? p : c);
 
-    // 史诗级 Prompt 结构
     const prompt = `
 当前分析切片：【品牌：${selectedBrand}】 | 【月份：${selectedMonth}】
 基础数据：共计 ${records.length} 篇笔记，总预估花费 ¥${cost}。
@@ -48,29 +46,29 @@ export const AIPanel: React.FC<Props> = ({ data, selectedBrand, selectedMonth })
 - 笔记类型: ${topRecord.noteType} / 形式: ${topRecord.noteForm}
 - 互动量: ${topRecord.interactions}
 
-请根据以上真实数据，输出商业洞察报告，必须包含以下6个模块（请使用 ## 作为主标题，- 作为列表）：
+请根据以上真实数据，输出商业洞察报告，必须包含以下6个模块（请严格使用 ### 作为主标题，- 作为列表）：
 
-## 达人采购策略（Creator Strategy）
+### 1. 达人采购策略
 分析粉丝层级、等级分布、标签聚类、是否偏腰部/复投。判断品牌更偏向：ROI效率型/曝光型/矩阵铺量型/精准垂直型（必须给出证据）。
 
-## 内容分析（Content Strategy）
+### 2. 内容分析
 分析视频图文比例、标题风格（情绪/生活/种草）、场景关键词。判断品牌是在做：生活方式包装/功能教育/节点营销/搜索SEO型/爆款冲刺。
 
-## 预算与ROI结构（Budget & Efficiency）
+### 3. 预算与ROI结构
 分析单粉成本、单互动成本等。判断品牌是否在控制成本？是否存在预算浪费或高价低效达人？
 
-## 内容效果结构（Performance）
+### 4. 内容效果结构
 分析高互动内容和低效内容并解释原因。
 
-## 品牌打法推测（Strategic Inference）
+### 5. 品牌打法推测
 判断品牌更接近哪种打法（曝光型/达人矩阵型/内容种草型/搜索SEO型/节点营销型/新品测试型/长期养号型/ROI效率型），写清依据。
 
-## 机会与行动建议（Opportunity）
+### 6. 机会与行动建议
 给出具体可执行建议：优先合作哪类达人？哪类性价比高/价格虚高？未覆盖场景？值得强化形式？复投建议？
 
-【要求】：所有结论必须引用具体数据。不要空泛表达。`;
+【要求】：所有结论必须引用具体数据。`;
 
-    setMessages([{ role: 'user', content: `请基于当前筛选（${selectedBrand} / ${selectedMonth}）生成深度商业分析报告。`, timestamp: new Date() }]);
+    setMessages([{ role: 'user', content: `请基于当前筛选生成深度商业分析报告。`, timestamp: new Date() }]);
     setIsTyping(true);
 
     try {
@@ -90,29 +88,47 @@ export const AIPanel: React.FC<Props> = ({ data, selectedBrand, selectedMonth })
     }
   };
 
-  // 黑科技：手写前端原生 Markdown 渲染器，让 AI 回复超级惊艳！
+  // 极限版原生 Markdown 渲染器，拦截所有可能捣乱的符号！
   const renderMessage = (content: string) => {
-    return content.split('\n').map((line, i) => {
-      // 大标题处理
-      if (line.startsWith('## ')) {
-        return <h2 key={i} className="text-[15px] font-black text-indigo-700 mt-5 mb-2 pb-1.5 border-b-2 border-indigo-100 flex items-center gap-1.5"><Sparkles size={16}/> {line.replace('## ', '')}</h2>;
+    // 强制清除无用的横线 --- 或 ====
+    const cleanContent = content.replace(/---+/g, '').replace(/===+/g, '');
+
+    return cleanContent.split('\n').map((line, i) => {
+      const trimmed = line.trim();
+      if (!trimmed) return <div key={i} className="h-1.5"></div>;
+
+      // 解析 **加粗** 的函数
+      const parseBold = (text: string) => {
+        const parts = text.split(/(\*\*.*?\*\*)/g);
+        return parts.map((p, j) => 
+          p.startsWith('**') ? <strong key={j} className="text-indigo-600 font-bold">{p.replace(/\*\*/g, '')}</strong> : p
+        );
+      };
+
+      // 强力拦截各种标题符号 (###, ##, #)
+      const matchHeading = trimmed.match(/^(#{1,3})\s+(.*)/);
+      if (matchHeading) {
+        return (
+          <h2 key={i} className="text-[15px] font-black text-indigo-700 mt-5 mb-2 pb-1.5 border-b-2 border-indigo-50 flex items-center gap-1.5">
+            <Sparkles size={16} className="text-amber-500" /> {parseBold(matchHeading[2])}
+          </h2>
+        );
       }
-      // 列表处理
-      if (line.startsWith('- ')) {
-        const parts = line.replace('- ', '').split(/(\*\*.*?\*\*)/g);
+
+      // 强力拦截列表符号 (- 或 *)，注意处理 "* **内容**:" 这种双重变体
+      const matchList = trimmed.match(/^[\*\-]\s+(.*)/);
+      if (matchList) {
         return (
           <li key={i} className="ml-4 list-disc marker:text-indigo-400 mb-1 text-[13px] text-slate-700 leading-relaxed">
-            {parts.map((p, j) => p.startsWith('**') ? <strong key={j} className="text-indigo-600 font-bold">{p.replace(/\*\*/g, '')}</strong> : p)}
+            {parseBold(matchList[1])}
           </li>
         );
       }
-      // 空行处理
-      if (line.trim() === '') return <div key={i} className="h-1.5"></div>;
-      // 普通文本处理 (提取粗体)
-      const parts = line.split(/(\*\*.*?\*\*)/g);
+
+      // 处理其他普通段落
       return (
         <p key={i} className="mb-1 text-[13px] text-slate-700 leading-relaxed">
-          {parts.map((p, j) => p.startsWith('**') ? <strong key={j} className="text-indigo-600 font-bold">{p.replace(/\*\*/g, '')}</strong> : p)}
+          {parseBold(trimmed)}
         </p>
       );
     });
@@ -140,7 +156,7 @@ export const AIPanel: React.FC<Props> = ({ data, selectedBrand, selectedMonth })
           <div className="flex flex-col items-center justify-center h-full text-center px-4">
             <Bot size={40} className="text-violet-200 mb-3" />
             <p className="text-sm font-bold text-slate-700 mb-1">全新 AI 分析引擎已就绪</p>
-            <p className="text-[11px] text-slate-500 mb-4 max-w-[200px]">已装载达人采购、内容运营、预算 ROI 及战略拆解框架</p>
+            <p className="text-[11px] text-slate-500 mb-4 max-w-[200px]">已装载最新版达人采购、内容运营及 ROI 战略分析框架</p>
             <button
               onClick={handleGenerateReport}
               disabled={data.totalNotes === 0}
@@ -157,7 +173,6 @@ export const AIPanel: React.FC<Props> = ({ data, selectedBrand, selectedMonth })
                 msg.role === 'user' ? 'bg-gradient-to-br from-indigo-500 to-violet-600 text-white text-[13px]' : 'bg-slate-50 border border-slate-100'
               }`}
             >
-              {/* 如果是 AI 的回复，调用渲染器进行美化！ */}
               {msg.role === 'assistant' ? renderMessage(msg.content) : msg.content}
             </div>
           </div>
