@@ -34,9 +34,7 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
     const trendMap = new Map();
     const typeMap = new Map();
     const creatorAttrMap = new Map();
-    
-    // 新增：用于计算复投达人
-    const creatorNotesMap = new Map<string, { count: number; name: string; type: string; followers: number }>();
+    const creatorNotesMap = new Map<string, { count: number; name: string; type: string; followers: number; xhsUrl: string }>();
     let videoCount = 0; let imageCount = 0;
 
     const top10Notes = [...filteredRecords].sort((a, b) => b.interactions - a.interactions).slice(0, 10);
@@ -47,8 +45,8 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
       if (r.interactions > maxInter) { maxInter = r.interactions; topCreator = r; }
       if (r.noteForm.includes('视频')) videoCount++; else imageCount++;
 
-      // 统计每个达人发了几篇笔记
-      const cInfo = creatorNotesMap.get(r.influencerId) || { count: 0, name: r.influencerName, type: r.influencerType, followers: r.followers };
+      // 修改：这里加入了 xhsUrl 供复投达人跳转使用
+      const cInfo = creatorNotesMap.get(r.influencerId) || { count: 0, name: r.influencerName, type: r.influencerType, followers: r.followers, xhsUrl: (r as any).xhsUrl };
       cInfo.count += 1;
       creatorNotesMap.set(r.influencerId, cInfo);
 
@@ -73,7 +71,6 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
       creatorAttrMap.set(attr, exa);
     });
 
-    // 筛选出复投达人（发文大于等于2篇的）
     const repeatedCreators = Array.from(creatorNotesMap.values()).filter(c => c.count > 1).sort((a, b) => b.count - a.count);
 
     const trends = Array.from(trendMap.values()).map(v => ({ 
@@ -201,7 +198,7 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
           </div>
         )}
 
-        {/* ================= Tab 3: 达人策略 (加入复投达人展现) ================= */}
+        {/* ================= Tab 3: 达人策略 (修复了跳转链接) ================= */}
         {activeTab === 'creators' && (
           <div className="space-y-6 animate-fade-in">
             {stats.topCreator && (
@@ -218,7 +215,6 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
               </div>
             )}
 
-            {/* 新增：总达人与品牌复投达人展示 */}
             <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-4">
               <div className="flex items-center justify-between pb-4 border-b border-slate-100">
                 <div className="flex items-center gap-3">
@@ -237,7 +233,7 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
                 </div>
               </div>
 
-              {/* 展开的复投达人名单 */}
+              {/* 修改：加上了一键跳转个人主页的链接 */}
               {stats.repeatedCreators.length > 0 && (
                 <div className="pt-4">
                   <p className="text-[11px] font-bold text-slate-600 mb-3 flex items-center gap-1.5"><Repeat size={14} className="text-indigo-500" /> 品牌高频复投达人 ({stats.repeatedCreators.length}位)</p>
@@ -245,7 +241,13 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
                     {stats.repeatedCreators.map((c, i) => (
                       <div key={i} className="bg-slate-50 border border-slate-100 px-3 py-2 rounded-lg flex flex-col justify-center gap-1 hover:shadow-sm transition-all">
                         <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold text-slate-700">{c.name}</span>
+                          {c.xhsUrl ? (
+                            <a href={c.xhsUrl} target="_blank" rel="noreferrer" className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-0.5 group" title="点击访问小红书主页">
+                              {c.name} <ExternalLink size={10} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+                            </a>
+                          ) : (
+                            <span className="text-xs font-bold text-slate-700">{c.name}</span>
+                          )}
                           <span className="text-[10px] text-white bg-indigo-500 px-1.5 rounded-sm shadow-sm">{c.count}篇</span>
                         </div>
                         <span className="text-[10px] text-slate-400">{c.type} · {formatNum(c.followers)}粉</span>
@@ -256,7 +258,6 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
               )}
             </div>
 
-            {/* 达人属性拆解保持不变 */}
             <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
               <h3 className="text-xs font-bold text-slate-700 mb-4 flex items-center gap-1.5"><PieIcon size={14}/> 达人属性结构 & 费用拆解</h3>
               <div className="grid gap-4">
@@ -335,7 +336,7 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
           </div>
         )}
 
-        {/* 费用分析 & 明细 保持不变 */}
+        {/* ================= Tab 4: 费用分析 & 明细 保持不变 ================= */}
         {activeTab === 'cost' && (
           <div className="space-y-6 animate-fade-in">
             <div className="flex gap-4">
