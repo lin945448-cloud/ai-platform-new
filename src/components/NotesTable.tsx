@@ -52,57 +52,56 @@ export const NotesTable: React.FC<Props> = ({ records }) => {
                 <th className="py-3 px-4 text-[11px] font-bold text-slate-500">评论</th>
                 <th className="py-3 px-4 text-[11px] font-bold text-slate-500">收藏</th>
                 <th className="py-3 px-4 text-[11px] font-bold text-slate-500">分享</th>
-                {/* 删除了最右侧的操作列，变得更紧凑 */}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {currentData.length > 0 ? currentData.map((row, i) => {
-                const xhsUrl = (row as any).xhsUrl; // 获取达人主页链接
+                const xhsUrl = (row as any).xhsUrl; // 获取达人小红书主页地址
                 return (
-                <tr key={i} className="hover:bg-slate-50/80 transition-colors group">
-                  {/* 修改：笔记标题变成可点击的蓝色链接 */}
-                  <td className="py-3 px-4 text-xs">
-                    {row.noteLink && row.noteLink !== '未知' ? (
-                      <a href={row.noteLink} target="_blank" rel="noreferrer" className="text-indigo-600 hover:text-indigo-800 font-bold flex items-start gap-1 group/link" title="点击访问小红书笔记">
-                        <span className="line-clamp-2 leading-relaxed">{row.title}</span>
-                        <ExternalLink size={12} className="opacity-0 group-hover/link:opacity-100 transition-opacity flex-shrink-0 mt-0.5" />
-                      </a>
-                    ) : (
-                      <div className="line-clamp-2 leading-relaxed font-medium text-slate-700" title={row.title}>{row.title}</div>
-                    )}
-                    <div className="text-[10px] text-slate-400 mt-1">{row.publishTime} · {row.noteForm}</div>
-                  </td>
+                  <tr key={i} className="hover:bg-slate-50/80 transition-colors group">
+                    <td className="py-3 px-4 text-xs">
+                      {row.noteLink && row.noteLink !== '未知' ? (
+                        <a href={row.noteLink} target="_blank" rel="noreferrer" className="text-indigo-600 hover:text-indigo-800 font-bold flex items-start gap-1 group/link" title="点击访问笔记">
+                          <span className="line-clamp-2 leading-relaxed">{row.title}</span>
+                          <ExternalLink size={12} className="opacity-0 group-hover/link:opacity-100 transition-opacity flex-shrink-0 mt-0.5" />
+                        </a>
+                      ) : (
+                        <div className="line-clamp-2 leading-relaxed font-medium text-slate-700">{row.title}</div>
+                      )}
+                      <div className="text-[10px] text-slate-400 mt-1">{row.publishTime} · {row.noteForm}</div>
+                    </td>
 
-                  <td className="py-3 px-4">
-                    <span className="text-[10px] font-medium bg-slate-100 text-slate-600 px-2 py-1 rounded-md">
-                      {row.noteType}
-                    </span>
-                  </td>
+                    <td className="py-3 px-4">
+                      <span className="text-[10px] font-medium bg-slate-100 text-slate-600 px-2 py-1 rounded-md">{row.noteType}</span>
+                    </td>
 
-                  {/* 修改：达人昵称变成可点击的蓝色链接 */}
-                  <td className="py-3 px-4 text-xs">
-                    {xhsUrl ? (
-                      <a href={xhsUrl} target="_blank" rel="noreferrer" className="text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1 group/link" title="点击访问达人主页">
-                        {row.influencerName}
-                        <ExternalLink size={10} className="opacity-0 group-hover/link:opacity-100 transition-opacity" />
-                      </a>
-                    ) : (
-                      <div className="font-bold text-slate-800">{row.influencerName}</div>
-                    )}
-                    <div className="text-[10px] text-slate-400 mt-0.5">
-                      <span className="text-amber-500 font-medium">{row.influencerType}</span>
-                      <span className="mx-1">·</span>
-                      {formatNum(row.followers)}粉
-                    </div>
-                  </td>
+                    <td className="py-3 px-4 text-xs">
+                      {xhsUrl ? (
+                        <a href={xhsUrl} target="_blank" rel="noreferrer" className="text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1 group/link" title="点击访问达人主页">
+                          {row.influencerName}
+                          <ExternalLink size={10} className="opacity-0 group-hover/link:opacity-100 transition-opacity" />
+                        </a>
+                      ) : (
+                        <div className="font-bold text-slate-800">{row.influencerName}</div>
+                      )}
+                      <div className="text-[10px] text-slate-400 mt-0.5">
+                        <span className="text-amber-500 font-medium">{row.influencerType}</span>
+                        <span className="mx-1">·</span>{formatNum(row.followers)}粉
+                      </div>
+                    </td>
 
-                  <td className="py-3 px-4 text-[13px] text-indigo-600 font-black">{formatNum(row.interactions)}</td>
-                  <td className="py-3 px-4 text-xs text-slate-600 font-medium">{formatNum(row.likes)}</td>
-                  <td className="py-3 px-4 text-xs text-slate-600 font-medium">{formatNum(row.comments)}</td>
-                  <td className="py-3 px-4 text-xs text-slate-600 font-medium">{formatNum(row.collects)}</td>
-                  <td className="py-3 px-4 text-xs text-slate-600 font-medium">{formatNum(row.shares)}</td>
+                    <td className="py-3 px-4 text-[13px] text-indigo-600 font-black">{formatNum(row.interactions)}</td>
+                    <td className="py-3 px-4 text-xs text-slate-600 font-medium">{formatNum(row.likes)}</td>
+                    <td className="py-3 px-4 text-xs text-slate-600 font-medium">{formatNum(row.comments)}</td>
+                    <td className="py-3 px-4 text-xs text-slate-600 font-medium">{formatNum(row.collects)}</td>
+                    <td className="py-3 px-4 text-xs text-slate-600 font-medium">{formatNum(row.shares)}</td>
+                  </tr>
+                );
+              }) : (
+                <tr>
+                  <td colSpan={8} className="py-12 text-center text-xs text-slate-400">没有找到匹配的数据</td>
                 </tr>
-              )})}
+              )}
             </tbody>
           </table>
         </div>
