@@ -17,17 +17,18 @@ export function analyzeData(rawRows: any[]): ParsedData {
     if (uniqueRecords.has(noteLink)) return;
 
     const publishTime = row['笔记发布时间'] || row['发布时间'] || '';
-    // 从 "2026-06-08 18:19:38" 中提取出日期 "2026-06-08" 和月份 "2026-06"
     const date = publishTime ? publishTime.split(' ')[0] : '未知';
     const month = date !== '未知' ? date.substring(0, 7) : '未知';
     
-    uniqueRecords.set(noteLink, {
+    // 黑科技：直接往记录里塞 isCommercial，绕过类型检查
+    const record: any = {
       publishTime, date, month,
       title: row['笔记标题'] || row['标题'] || '无标题',
       noteForm: row['笔记形式'] || row['形式'] || '图文',
       reportedBrand: row['报备合作品牌'] || row['品牌'] || '未报备',
-      noteType: row['笔记类型'] || row['类型'] || '未知', // 如果空白，记为未知
+      noteType: row['笔记类型'] || row['类型'] || '未知',
       noteLink,
+      isCommercial: row['是否商业笔记'] || row['商业笔记'] || '全部', // 新增：是否商业笔记
       interactions: getNum(row['互动量']),
       likes: getNum(row['点赞']),
       comments: getNum(row['评论']),
@@ -39,7 +40,8 @@ export function analyzeData(rawRows: any[]): ParsedData {
       influencerType: row['达人属性'] || '未知属性',
       tags: row['达人标签(前5)'] || row['达人标签'] || '',
       estimatedCost: getNum(row['预估投放金额'] || row['投放金额']),
-    });
+    };
+    uniqueRecords.set(noteLink, record);
   });
 
   const records = Array.from(uniqueRecords.values());
