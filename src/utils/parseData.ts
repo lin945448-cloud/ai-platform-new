@@ -20,7 +20,7 @@ export function analyzeData(rawRows: any[]): ParsedData {
     const date = publishTime ? publishTime.split(' ')[0] : '未知';
     const month = date !== '未知' ? date.substring(0, 7) : '未知';
     
-    // 黑科技：直接往记录里塞 isCommercial，绕过类型检查
+    // 黑科技：直接往记录里塞 isCommercial 和 xhsUrl
     const record: any = {
       publishTime, date, month,
       title: row['笔记标题'] || row['标题'] || '无标题',
@@ -28,7 +28,8 @@ export function analyzeData(rawRows: any[]): ParsedData {
       reportedBrand: row['报备合作品牌'] || row['品牌'] || '未报备',
       noteType: row['笔记类型'] || row['类型'] || '未知',
       noteLink,
-      isCommercial: row['是否商业笔记'] || row['商业笔记'] || '全部', // 新增：是否商业笔记
+      isCommercial: row['是否商业笔记'] || row['商业笔记'] || '全部',
+      xhsUrl: row['达人小红书主页地址'] || row['小红书主页地址'] || '', // 新增：抓取小红书主页链接
       interactions: getNum(row['互动量']),
       likes: getNum(row['点赞']),
       comments: getNum(row['评论']),
