@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { ParsedData } from '../types';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, LabelList, PieChart, Pie, Cell } from 'recharts';
-import { Users, FileText, Zap, DollarSign, LayoutDashboard, List, Clapperboard, Image as ImageIcon, PieChart as PieIcon, ThumbsUp, MessageCircle, Star, Share2, Crown, Award, ExternalLink } from 'lucide-react';
+import { Users, FileText, Zap, DollarSign, LayoutDashboard, List, Clapperboard, Image as ImageIcon, PieChart as PieIcon, ThumbsUp, MessageCircle, Star, Share2, Crown, Award, ExternalLink, Repeat } from 'lucide-react';
 import { NotesTable } from './NotesTable';
 
 interface Props { data: ParsedData; selectedCommercial: string; selectedBrand: string; selectedMonth: string; }
@@ -28,13 +28,15 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
     const collects = filteredRecords.reduce((s, r) => s + r.collects, 0);
     const shares = filteredRecords.reduce((s, r) => s + r.shares, 0);
     const cpe = interactions > 0 ? (cost / interactions).toFixed(2) : '0.00';
-    // 新增：提取独立达人数
     const influencerCount = new Set(filteredRecords.map(r => r.influencerId)).size;
 
     const timeUnit = selectedMonth === '全部' ? 'month' : 'date';
     const trendMap = new Map();
     const typeMap = new Map();
     const creatorAttrMap = new Map();
+    
+    // 新增：用于计算复投达人
+    const creatorNotesMap = new Map<string, { count: number; name: string; type: string; followers: number }>();
     let videoCount = 0; let imageCount = 0;
 
     const top10Notes = [...filteredRecords].sort((a, b) => b.interactions - a.interactions).slice(0, 10);
@@ -44,6 +46,11 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
     filteredRecords.forEach(r => {
       if (r.interactions > maxInter) { maxInter = r.interactions; topCreator = r; }
       if (r.noteForm.includes('视频')) videoCount++; else imageCount++;
+
+      // 统计每个达人发了几篇笔记
+      const cInfo = creatorNotesMap.get(r.influencerId) || { count: 0, name: r.influencerName, type: r.influencerType, followers: r.followers };
+      cInfo.count += 1;
+      creatorNotesMap.set(r.influencerId, cInfo);
 
       const t = r[timeUnit];
       if (t && t !== '未知') {
@@ -66,6 +73,9 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
       creatorAttrMap.set(attr, exa);
     });
 
+    // 筛选出复投达人（发文大于等于2篇的）
+    const repeatedCreators = Array.from(creatorNotesMap.values()).filter(c => c.count > 1).sort((a, b) => b.count - a.count);
+
     const trends = Array.from(trendMap.values()).map(v => ({ 
       ...v, creators: v.creators.size, timeLabel: timeUnit === 'date' ? v.time.slice(5) : v.time,
       cpe: v.interactions > 0 ? (v.cost / v.interactions).toFixed(2) : 0 
@@ -74,10 +84,9 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
     const baseNoteTypes = Array.from(typeMap.values()).map(v => ({ ...v, avgInt: Math.round(v.totalInt / v.count) }));
     const noteTypesByCount = [...baseNoteTypes].sort((a, b) => b.count - a.count);
     const noteTypesByAvgInt = [...baseNoteTypes].sort((a, b) => b.avgInt - a.avgInt);
-
     const creatorAttrs = Array.from(creatorAttrMap.values()).map(v => ({ ...v, tiers: Array.from(v.fanTiers.entries()).map(([k, t]: any) => ({ name: k, ...t })) })).sort((a, b) => b.count - a.count);
 
-    return { notes, interactions, cost, cpe, likes, comments, collects, shares, influencerCount, trends, noteTypesByCount, noteTypesByAvgInt, creatorAttrs, top10Notes, topCreator, videoCount, imageCount, videoPct: notes > 0 ? Math.round((videoCount / notes) * 100) : 0, imagePct: notes > 0 ? Math.round((imageCount / notes) * 100) : 0, isDaily: timeUnit === 'date' };
+    return { notes, interactions, cost, cpe, likes, comments, collects, shares, influencerCount, repeatedCreators, trends, noteTypesByCount, noteTypesByAvgInt, creatorAttrs, top10Notes, topCreator, videoCount, imageCount, videoPct: notes > 0 ? Math.round((videoCount / notes) * 100) : 0, imagePct: notes > 0 ? Math.round((imageCount / notes) * 100) : 0, isDaily: timeUnit === 'date' };
   }, [filteredRecords, selectedMonth]);
 
   if (data.totalNotes === 0) return <div className="h-full bg-white rounded-2xl flex justify-center items-center text-slate-400 font-bold">请先上传数据文件</div>;
@@ -95,7 +104,7 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
 
       <div className="flex-1 overflow-y-auto custom-scroll pr-2 space-y-6 pb-10">
         
-        {/* ================= Tab 1: 数据总览 ================= */}
+        {/* ================= 数据总览 & 内容分析 保持不变 ================= */}
         {activeTab === 'overview' && (
           <div className="space-y-6 animate-fade-in">
             <div className="grid grid-cols-4 gap-3">
@@ -124,7 +133,6 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
 
             {!stats.isDaily && (
               <ChartBox title="月度笔记总数推移 (直观数据)">
-                {/* 增加 margin top，防止数字被遮挡！ */}
                 <BarChart data={stats.trends} margin={{ top: 25 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                   <XAxis dataKey="timeLabel" axisLine={false} tickLine={false} tick={{ fontSize: 11 }} />
@@ -139,7 +147,6 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
           </div>
         )}
 
-        {/* ================= Tab 2: 内容分析 ================= */}
         {activeTab === 'content' && (
           <div className="space-y-6 animate-fade-in">
             <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
@@ -177,7 +184,6 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
             </div>
 
             <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
-              {/* 文案修改为：赛道篇均互动量 */}
               <h3 className="text-xs font-bold text-slate-700 mb-4 flex items-center gap-1.5">⚡ 赛道篇均互动量</h3>
               <div className="w-full" style={{ height: Math.max(300, stats.noteTypesByAvgInt.length * 40) }}>
                 <ResponsiveContainer width="100%" height="100%">
@@ -195,7 +201,7 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
           </div>
         )}
 
-        {/* ================= Tab 3: 达人策略 ================= */}
+        {/* ================= Tab 3: 达人策略 (加入复投达人展现) ================= */}
         {activeTab === 'creators' && (
           <div className="space-y-6 animate-fade-in">
             {stats.topCreator && (
@@ -212,25 +218,45 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
               </div>
             )}
 
-            {/* 新增：总达人与费用概览卡片 */}
-            <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center"><Users className="text-indigo-500" size={20}/></div>
-                <div>
-                  <p className="text-[11px] text-slate-500 mb-0.5">合作达人总数</p>
-                  <p className="text-xl font-black text-slate-800">{stats.influencerCount} <span className="text-xs font-normal text-slate-400">人</span></p>
+            {/* 新增：总达人与品牌复投达人展示 */}
+            <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-4">
+              <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center"><Users className="text-indigo-500" size={20}/></div>
+                  <div>
+                    <p className="text-[11px] text-slate-500 mb-0.5">合作达人总数 (去重)</p>
+                    <p className="text-xl font-black text-slate-800">{stats.influencerCount} <span className="text-xs font-normal text-slate-400">人</span></p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 text-right">
+                  <div>
+                    <p className="text-[11px] text-slate-500 mb-0.5">达人预估总花费</p>
+                    <p className="text-xl font-black text-emerald-600">¥{formatNum(stats.cost)}</p>
+                  </div>
+                  <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center"><DollarSign className="text-emerald-500" size={20}/></div>
                 </div>
               </div>
-              <div className="h-8 w-px bg-slate-100"></div>
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center"><DollarSign className="text-emerald-500" size={20}/></div>
-                <div>
-                  <p className="text-[11px] text-slate-500 mb-0.5">达人预估总花费</p>
-                  <p className="text-xl font-black text-emerald-600">¥{formatNum(stats.cost)}</p>
+
+              {/* 展开的复投达人名单 */}
+              {stats.repeatedCreators.length > 0 && (
+                <div className="pt-4">
+                  <p className="text-[11px] font-bold text-slate-600 mb-3 flex items-center gap-1.5"><Repeat size={14} className="text-indigo-500" /> 品牌高频复投达人 ({stats.repeatedCreators.length}位)</p>
+                  <div className="flex flex-wrap gap-2.5">
+                    {stats.repeatedCreators.map((c, i) => (
+                      <div key={i} className="bg-slate-50 border border-slate-100 px-3 py-2 rounded-lg flex flex-col justify-center gap-1 hover:shadow-sm transition-all">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-slate-700">{c.name}</span>
+                          <span className="text-[10px] text-white bg-indigo-500 px-1.5 rounded-sm shadow-sm">{c.count}篇</span>
+                        </div>
+                        <span className="text-[10px] text-slate-400">{c.type} · {formatNum(c.followers)}粉</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
 
+            {/* 达人属性拆解保持不变 */}
             <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
               <h3 className="text-xs font-bold text-slate-700 mb-4 flex items-center gap-1.5"><PieIcon size={14}/> 达人属性结构 & 费用拆解</h3>
               <div className="grid gap-4">
@@ -289,7 +315,6 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
                         <p className="text-[10px] text-slate-500 mt-0.5">{note.influencerType} · {formatNum(note.followers)}粉</p>
                       </div>
                     </div>
-                    {/* 修改：右侧加入了一键访问链接按钮 */}
                     <div className="flex items-center gap-4 text-right">
                       <div>
                         <p className="text-sm font-black text-indigo-600">{formatNum(note.interactions)}</p>
@@ -310,7 +335,7 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
           </div>
         )}
 
-        {/* ================= Tab 4: 费用分析 ================= */}
+        {/* 费用分析 & 明细 保持不变 */}
         {activeTab === 'cost' && (
           <div className="space-y-6 animate-fade-in">
             <div className="flex gap-4">
