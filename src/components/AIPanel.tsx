@@ -18,38 +18,58 @@ export const AIPanel: React.FC<Props> = ({ data, selectedBrand, selectedMonth })
   }, [messages, isTyping]);
 
   const handleGenerateReport = async () => {
-    // 1. 过滤当前数据
     const records = data.records.filter(r => 
       (selectedBrand === '全部' || r.reportedBrand === selectedBrand) &&
       (selectedMonth === '全部' || r.month === selectedMonth)
     );
     if (records.length === 0) return;
 
-    // 2. 组装给 AI 的商业级 Prompt (完全基于你的需求)
+    // 为 AI 准备极限详实的数据弹药
     const cost = records.reduce((s, r) => s + r.estimatedCost, 0);
+    const interactions = records.reduce((s, r) => s + r.interactions, 0);
+    const uniqueCreators = Array.from(new Map(records.map(r => [r.influencerId, r])).values());
+    const totalFollowers = uniqueCreators.reduce((s, r) => s + r.followers, 0);
+    const cpe = interactions > 0 ? (cost / interactions).toFixed(2) : 0;
+    const cpf = totalFollowers > 0 ? (cost / totalFollowers).toFixed(2) : 0;
+    
+    const tags = Array.from(new Set(records.map(r => r.tags).filter(Boolean).map(t => t.split(',')[0]))).slice(0, 15).join('、');
     const topRecord = records.reduce((p, c) => p.interactions > c.interactions ? p : c);
-    
-    const tags = Array.from(new Set(records.map(r => r.tags).filter(Boolean).map(t => t.split(',')[0]))).slice(0, 10).join('、');
-    
+
+    // 史诗级 Prompt 结构
     const prompt = `
 当前分析切片：【品牌：${selectedBrand}】 | 【月份：${selectedMonth}】
-共计 ${records.length} 篇笔记。预估总花费：¥${cost}。
-高频达人标签聚类：${tags}
+基础数据：共计 ${records.length} 篇笔记，总预估花费 ¥${cost}。
+达人数据：共 ${uniqueCreators.length} 位达人，总粉丝数 ${totalFollowers}。单粉成本(CPF)约 ¥${cpf}，单互动成本(CPE)约 ¥${cpe}。
+高频达人标签：${tags}
 
-表现最爆款的笔记特征：
+爆款笔记特征：
 - 标题: ${topRecord.title}
 - 达人属性: ${topRecord.influencerType} (粉丝:${topRecord.followers})
 - 笔记类型: ${topRecord.noteType} / 形式: ${topRecord.noteForm}
 - 互动量: ${topRecord.interactions}
 
-请根据以上真实数据，输出商业洞察报告（包含以下4部分）：
-1.【达人策略 Creator Strategy】：判断品牌偏向ROI效率型、曝光型还是垂直型？是否偏向某类达人？
-2.【内容策略 Content Strategy】：基于爆款标题和形式，推断其内容包装是在做生活方式、功能教育还是爆款冲刺？
-3.【人群策略推断 Audience】：基于达人标签和笔记类型，推测目标人群（如精致白领、宝妈等）并说明依据。
-4.【机会与行动建议 Opportunity】：哪类达人值得优先合作？哪些内容形式应该强化？给出落地建议。
-（必须用 Markdown 排版，使用加粗和分点，语气专业商业化）`;
+请根据以上真实数据，输出商业洞察报告，必须包含以下6个模块（请使用 ## 作为主标题，- 作为列表）：
 
-    // 3. 开始发送请求
+## 达人采购策略（Creator Strategy）
+分析粉丝层级、等级分布、标签聚类、是否偏腰部/复投。判断品牌更偏向：ROI效率型/曝光型/矩阵铺量型/精准垂直型（必须给出证据）。
+
+## 内容分析（Content Strategy）
+分析视频图文比例、标题风格（情绪/生活/种草）、场景关键词。判断品牌是在做：生活方式包装/功能教育/节点营销/搜索SEO型/爆款冲刺。
+
+## 预算与ROI结构（Budget & Efficiency）
+分析单粉成本、单互动成本等。判断品牌是否在控制成本？是否存在预算浪费或高价低效达人？
+
+## 内容效果结构（Performance）
+分析高互动内容和低效内容并解释原因。
+
+## 品牌打法推测（Strategic Inference）
+判断品牌更接近哪种打法（曝光型/达人矩阵型/内容种草型/搜索SEO型/节点营销型/新品测试型/长期养号型/ROI效率型），写清依据。
+
+## 机会与行动建议（Opportunity）
+给出具体可执行建议：优先合作哪类达人？哪类性价比高/价格虚高？未覆盖场景？值得强化形式？复投建议？
+
+【要求】：所有结论必须引用具体数据。不要空泛表达。`;
+
     setMessages([{ role: 'user', content: `请基于当前筛选（${selectedBrand} / ${selectedMonth}）生成深度商业分析报告。`, timestamp: new Date() }]);
     setIsTyping(true);
 
@@ -59,7 +79,6 @@ export const AIPanel: React.FC<Props> = ({ data, selectedBrand, selectedMonth })
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt })
       });
-
       const resData = await res.json();
       if (!res.ok) throw new Error(resData.error || '请求失败');
 
@@ -71,6 +90,34 @@ export const AIPanel: React.FC<Props> = ({ data, selectedBrand, selectedMonth })
     }
   };
 
+  // 黑科技：手写前端原生 Markdown 渲染器，让 AI 回复超级惊艳！
+  const renderMessage = (content: string) => {
+    return content.split('\n').map((line, i) => {
+      // 大标题处理
+      if (line.startsWith('## ')) {
+        return <h2 key={i} className="text-[15px] font-black text-indigo-700 mt-5 mb-2 pb-1.5 border-b-2 border-indigo-100 flex items-center gap-1.5"><Sparkles size={16}/> {line.replace('## ', '')}</h2>;
+      }
+      // 列表处理
+      if (line.startsWith('- ')) {
+        const parts = line.replace('- ', '').split(/(\*\*.*?\*\*)/g);
+        return (
+          <li key={i} className="ml-4 list-disc marker:text-indigo-400 mb-1 text-[13px] text-slate-700 leading-relaxed">
+            {parts.map((p, j) => p.startsWith('**') ? <strong key={j} className="text-indigo-600 font-bold">{p.replace(/\*\*/g, '')}</strong> : p)}
+          </li>
+        );
+      }
+      // 空行处理
+      if (line.trim() === '') return <div key={i} className="h-1.5"></div>;
+      // 普通文本处理 (提取粗体)
+      const parts = line.split(/(\*\*.*?\*\*)/g);
+      return (
+        <p key={i} className="mb-1 text-[13px] text-slate-700 leading-relaxed">
+          {parts.map((p, j) => p.startsWith('**') ? <strong key={j} className="text-indigo-600 font-bold">{p.replace(/\*\*/g, '')}</strong> : p)}
+        </p>
+      );
+    });
+  };
+
   return (
     <div className="h-full bg-white rounded-2xl border border-slate-100 flex flex-col relative p-4">
       <div className="flex items-center justify-between mb-3 flex-shrink-0 border-b border-slate-50 pb-3">
@@ -79,8 +126,8 @@ export const AIPanel: React.FC<Props> = ({ data, selectedBrand, selectedMonth })
             <Sparkles size={16} className="text-white" />
           </div>
           <div>
-            <h2 className="text-sm font-bold text-slate-800">DeepSeek 商业洞察</h2>
-            <p className="text-[10px] text-slate-400">基于本地数据推理 · 拒绝编造</p>
+            <h2 className="text-sm font-bold text-slate-800">DeepSeek 商业洞察大脑</h2>
+            <p className="text-[10px] text-slate-400">结合全盘数据深度推理 · 拒绝空泛</p>
           </div>
         </div>
         {messages.length > 0 && (
@@ -92,11 +139,12 @@ export const AIPanel: React.FC<Props> = ({ data, selectedBrand, selectedMonth })
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center px-4">
             <Bot size={40} className="text-violet-200 mb-3" />
-            <p className="text-sm font-bold text-slate-700 mb-1">AI 分析引擎已就绪</p>
+            <p className="text-sm font-bold text-slate-700 mb-1">全新 AI 分析引擎已就绪</p>
+            <p className="text-[11px] text-slate-500 mb-4 max-w-[200px]">已装载达人采购、内容运营、预算 ROI 及战略拆解框架</p>
             <button
               onClick={handleGenerateReport}
               disabled={data.totalNotes === 0}
-              className="mt-4 flex items-center gap-2 bg-slate-800 hover:bg-slate-900 disabled:bg-slate-300 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition-all shadow-md active:scale-95"
+              className="flex items-center gap-2 bg-slate-800 hover:bg-slate-900 disabled:bg-slate-300 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition-all shadow-md active:scale-95"
             >
               <Sparkles size={16} /> 提取核心数据并生成报告
             </button>
@@ -105,11 +153,12 @@ export const AIPanel: React.FC<Props> = ({ data, selectedBrand, selectedMonth })
 
         {messages.map((msg, i) => (
           <div key={i} className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-            <div className={`max-w-[90%] rounded-xl px-4 py-3 shadow-sm text-[13px] leading-relaxed whitespace-pre-wrap ${
-                msg.role === 'user' ? 'bg-gradient-to-br from-indigo-500 to-violet-600 text-white' : 'bg-slate-50 border border-slate-100 text-slate-700'
+            <div className={`max-w-[95%] rounded-xl px-4 py-3 shadow-sm ${
+                msg.role === 'user' ? 'bg-gradient-to-br from-indigo-500 to-violet-600 text-white text-[13px]' : 'bg-slate-50 border border-slate-100'
               }`}
             >
-              {msg.content}
+              {/* 如果是 AI 的回复，调用渲染器进行美化！ */}
+              {msg.role === 'assistant' ? renderMessage(msg.content) : msg.content}
             </div>
           </div>
         ))}
@@ -120,7 +169,7 @@ export const AIPanel: React.FC<Props> = ({ data, selectedBrand, selectedMonth })
               <div className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce" />
               <div className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '150ms' }} />
               <div className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '300ms' }} />
-              <span className="text-[11px] text-slate-400 ml-2">DeepSeek 模型推理中...</span>
+              <span className="text-[11px] text-slate-400 ml-2">DeepSeek 模型深度拆解中...</span>
             </div>
           </div>
         )}
