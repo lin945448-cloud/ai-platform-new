@@ -7,14 +7,6 @@ const getNum = (val: any): number => {
   return isNaN(parsed) ? 0 : parsed;
 };
 
-const getFanTier = (followers: number): string => {
-  if (followers < 30000) return '3万以下';
-  if (followers < 50000) return '3-5万';
-  if (followers < 100000) return '5-10万';
-  if (followers < 300000) return '10-30万';
-  return '30万以上';
-};
-
 export function analyzeData(rawRows: any[]): ParsedData {
   if (!rawRows || rawRows.length === 0) return getEmptyData();
 
@@ -25,14 +17,16 @@ export function analyzeData(rawRows: any[]): ParsedData {
     if (uniqueRecords.has(noteLink)) return;
 
     const publishTime = row['笔记发布时间'] || row['发布时间'] || '';
-    const month = publishTime ? publishTime.substring(0, 7) : '未知';
+    // 从 "2026-06-08 18:19:38" 中提取出日期 "2026-06-08" 和月份 "2026-06"
+    const date = publishTime ? publishTime.split(' ')[0] : '未知';
+    const month = date !== '未知' ? date.substring(0, 7) : '未知';
     
     uniqueRecords.set(noteLink, {
-      publishTime, month,
+      publishTime, date, month,
       title: row['笔记标题'] || row['标题'] || '无标题',
       noteForm: row['笔记形式'] || row['形式'] || '图文',
       reportedBrand: row['报备合作品牌'] || row['品牌'] || '未报备',
-      noteType: row['笔记类型'] || row['类型'] || '其他',
+      noteType: row['笔记类型'] || row['类型'] || '未知', // 如果空白，记为未知
       noteLink,
       interactions: getNum(row['互动量']),
       likes: getNum(row['点赞']),
@@ -61,17 +55,10 @@ export function analyzeData(rawRows: any[]): ParsedData {
   return {
     records, totalNotes, totalInteractions, totalCost,
     influencerCount: new Set(records.map(r => r.influencerId)).size,
-    brands, months,
-    fanTiers: [], creatorTypes: [], topCreator: null, repeatedCreators: 0,
-    cpe: totalInteractions > 0 ? totalCost / totalInteractions : 0,
-    cpf: 0, medianCost: 0, videoCount: 0, imageCount: 0, brandStats: []
+    brands, months
   };
 }
 
 export function getEmptyData(): ParsedData {
-  return {
-    records: [], totalNotes: 0, totalInteractions: 0, totalCost: 0, influencerCount: 0,
-    brands: [], months: [], fanTiers: [], creatorTypes: [], topCreator: null, repeatedCreators: 0,
-    cpe: 0, cpf: 0, medianCost: 0, videoCount: 0, imageCount: 0, brandStats: []
-  };
+  return { records: [], totalNotes: 0, totalInteractions: 0, totalCost: 0, influencerCount: 0, brands: [], months: [] };
 }
