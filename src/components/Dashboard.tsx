@@ -108,7 +108,7 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
               <StatCard icon={<Share2/>} title="总分享数" value={formatNum(stats.shares)} color="text-cyan-500" bg="bg-cyan-50" />
             </div>
 
-            <ChartBox title={stats.isDaily ? "每日互动与分享趋势 (双轴)" : "月度互动与分享推移 (双轴)"}>
+            <ChartBox title={stats.isDaily ? "每日互动与分享趋势" : "月度互动与分享推移"}>
               <LineChart data={stats.trends}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="timeLabel" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#94a3b8' }} />
@@ -122,7 +122,7 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
             </ChartBox>
 
             {!stats.isDaily && (
-              <ChartBox title="月度笔记总数推移 (直观数据)">
+              <ChartBox title="月度笔记总数推移">
                 <BarChart data={stats.trends}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                   <XAxis dataKey="timeLabel" axisLine={false} tickLine={false} tick={{ fontSize: 11 }} />
@@ -177,16 +177,16 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
               </div>
             </div>
 
-            {/* 赛道平均互动量 (独立全宽图表) */}
+            {/* 赛道篇均互动量 (独立全宽图表) */}
             <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
-              <h3 className="text-xs font-bold text-slate-700 mb-4 flex items-center gap-1.5">⚡ 赛道平均互动量</h3>
+              <h3 className="text-xs font-bold text-slate-700 mb-4 flex items-center gap-1.5">⚡ 赛道篇均互动量</h3>
               <div className="w-full" style={{ height: Math.max(300, stats.noteTypesByAvgInt.length * 40) }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={stats.noteTypesByAvgInt} layout="vertical" margin={{ left: 10, right: 40 }}>
                     <XAxis type="number" hide />
                     <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748b' }} width={80} />
                     <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ borderRadius: '8px', border: 'none' }} formatter={(val) => formatNum(val as number)} />
-                    <Bar dataKey="avgInt" name="平均互动量" fill="#EC4899" radius={[0, 4, 4, 0]} barSize={20}>
+                    <Bar dataKey="avgInt" name="篇均互动量" fill="#EC4899" radius={[0, 4, 4, 0]} barSize={20}>
                       <LabelList dataKey="avgInt" position="right" fill="#64748b" fontSize={11} fontWeight="bold" formatter={formatNum} />
                     </Bar>
                   </BarChart>
@@ -202,7 +202,7 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
             {stats.topCreator && (
               <div className="bg-gradient-to-r from-violet-50 to-indigo-50 rounded-xl p-4 border border-violet-100 flex items-center justify-between">
                 <div>
-                  <div className="flex items-center gap-1.5 mb-1"><Award size={16} className="text-violet-600" /><span className="text-xs font-bold text-violet-800">最高互动达人揭秘</span></div>
+                  <div className="flex items-center gap-1.5 mb-1"><Award size={16} className="text-violet-600" /><span className="text-xs font-bold text-violet-800">最高互动达人</span></div>
                   <p className="text-sm font-bold text-slate-800">{stats.topCreator.influencerName}</p>
                   <p className="text-[11px] text-slate-600 mt-1 truncate max-w-md">爆文: {stats.topCreator.title}</p>
                 </div>
@@ -300,7 +300,7 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
               </div>
             </div>
 
-            <ChartBox title={stats.isDaily ? "每日预估费用推移" : "月度预估费用与 CPE 推移 (双轴)"}>
+            <ChartBox title={stats.isDaily ? "每日预估费用推移" : "月度预估费用与 CPE 推移"}>
               <LineChart data={stats.trends}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="timeLabel" axisLine={false} tickLine={false} tick={{ fontSize: 11 }} />
