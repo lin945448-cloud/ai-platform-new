@@ -4,9 +4,7 @@ import { getEmptyData } from './utils/parseData';
 import { Activity, Filter } from 'lucide-react';
 import { UploadBar } from './components/UploadBar';
 import { Dashboard } from './components/Dashboard';
-
-// 只剩下 AI 还是占位符了，马上就搞定它！
-const AIPanelPlaceholder = () => <div className="h-full bg-white rounded-2xl border border-slate-100 flex items-center justify-center text-slate-400 font-bold text-lg">🧠 正在组装：DeepSeek AI 商业洞察大脑...</div>;
+import { AIPanel } from './components/AIPanel'; // 引入真实的 AI 面板！
 
 export default function App() {
   const [data, setData] = useState<ParsedData>(getEmptyData());
@@ -50,11 +48,11 @@ export default function App() {
 
       <div className="flex-1 flex gap-5 px-6 pb-5 overflow-hidden min-h-0">
         <div className="flex flex-col h-full shadow-sm" style={{ width: '55%' }}>
-          {/* 真实的看板装填完毕！ */}
           <Dashboard data={data} selectedBrand={selectedBrand} selectedMonth={selectedMonth} />
         </div>
         <div className="flex flex-col h-full shadow-sm" style={{ flex: 1 }}>
-          <AIPanelPlaceholder />
+          {/* 终极合体！真实的 AI 面板装填完毕 */}
+          <AIPanel data={data} selectedBrand={selectedBrand} selectedMonth={selectedMonth} />
         </div>
       </div>
     </div>
