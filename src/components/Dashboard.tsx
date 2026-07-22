@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { ParsedData } from '../types';
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, LabelList } from 'recharts';
-import { Users, FileText, Zap, DollarSign, LayoutDashboard, List, Clapperboard, Image as ImageIcon, PieChart as PieIcon, ThumbsUp, MessageCircle, Star, Share2, Crown } from 'lucide-react';
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, LabelList, PieChart, Pie, Cell } from 'recharts';
+import { Users, FileText, Zap, DollarSign, LayoutDashboard, List, Clapperboard, Image as ImageIcon, PieChart as PieIcon, ThumbsUp, MessageCircle, Star, Share2, Crown, Award } from 'lucide-react';
 import { NotesTable } from './NotesTable';
 
 interface Props { data: ParsedData; selectedCommercial: string; selectedBrand: string; selectedMonth: string; }
@@ -35,10 +35,12 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
     const creatorAttrMap = new Map();
     let videoCount = 0; let imageCount = 0;
 
-    // 达人Top10计算
     const top10Notes = [...filteredRecords].sort((a, b) => b.interactions - a.interactions).slice(0, 10);
+    let topCreator = null;
+    let maxInter = -1;
 
     filteredRecords.forEach(r => {
+      if (r.interactions > maxInter) { maxInter = r.interactions; topCreator = r; }
       if (r.noteForm.includes('视频')) videoCount++; else imageCount++;
 
       const t = r[timeUnit];
@@ -67,10 +69,14 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
       cpe: v.interactions > 0 ? (v.cost / v.interactions).toFixed(2) : 0 
     })).sort((a, b) => a.time.localeCompare(b.time));
 
-    const noteTypes = Array.from(typeMap.values()).map(v => ({ ...v, avgInt: Math.round(v.totalInt / v.count) })).sort((a, b) => b.count - a.count);
+    // 修复 Bug 的关键：分离出两个不同的数组，不直接在渲染时 sort
+    const baseNoteTypes = Array.from(typeMap.values()).map(v => ({ ...v, avgInt: Math.round(v.totalInt / v.count) }));
+    const noteTypesByCount = [...baseNoteTypes].sort((a, b) => b.count - a.count);
+    const noteTypesByAvgInt = [...baseNoteTypes].sort((a, b) => b.avgInt - a.avgInt);
+
     const creatorAttrs = Array.from(creatorAttrMap.values()).map(v => ({ ...v, tiers: Array.from(v.fanTiers.entries()).map(([k, t]: any) => ({ name: k, ...t })) })).sort((a, b) => b.count - a.count);
 
-    return { notes, interactions, cost, cpe, likes, comments, collects, shares, trends, noteTypes, creatorAttrs, top10Notes, videoCount, imageCount, videoPct: notes > 0 ? Math.round((videoCount / notes) * 100) : 0, imagePct: notes > 0 ? Math.round((imageCount / notes) * 100) : 0, isDaily: timeUnit === 'date' };
+    return { notes, interactions, cost, cpe, likes, comments, collects, shares, trends, noteTypesByCount, noteTypesByAvgInt, creatorAttrs, top10Notes, topCreator, videoCount, imageCount, videoPct: notes > 0 ? Math.round((videoCount / notes) * 100) : 0, imagePct: notes > 0 ? Math.round((imageCount / notes) * 100) : 0, isDaily: timeUnit === 'date' };
   }, [filteredRecords, selectedMonth]);
 
   if (data.totalNotes === 0) return <div className="h-full bg-white rounded-2xl flex justify-center items-center text-slate-400 font-bold">请先上传数据文件</div>;
@@ -96,7 +102,6 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
               <StatCard icon={<Zap/>} title="总互动量" value={formatNum(stats.interactions)} color="text-indigo-500" bg="bg-indigo-50" />
               <StatCard icon={<DollarSign/>} title="总预估花费" value={`¥${formatNum(stats.cost)}`} color="text-emerald-500" bg="bg-emerald-50" />
               <StatCard icon={<Users/>} title="单互动成本(CPE)" value={`¥${stats.cpe}`} color="text-amber-500" bg="bg-amber-50" />
-              {/* 新增的4个卡片 */}
               <StatCard icon={<ThumbsUp/>} title="总点赞数" value={formatNum(stats.likes)} color="text-rose-500" bg="bg-rose-50" />
               <StatCard icon={<MessageCircle/>} title="总评论数" value={formatNum(stats.comments)} color="text-violet-500" bg="bg-violet-50" />
               <StatCard icon={<Star/>} title="总收藏数" value={formatNum(stats.collects)} color="text-fuchsia-500" bg="bg-fuchsia-50" />
@@ -107,7 +112,6 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
               <LineChart data={stats.trends}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="timeLabel" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#94a3b8' }} />
-                {/* 双 Y 轴设计 */}
                 <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#6366F1' }} width={40} tickFormatter={formatNum} />
                 <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#14B8A6' }} width={40} tickFormatter={formatNum} />
                 <Tooltip contentStyle={{ borderRadius: '8px', border: 'none' }} />
@@ -125,7 +129,6 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
                   <YAxis hide />
                   <Tooltip cursor={{ fill: '#f8fafc' }} contentStyle={{ borderRadius: '8px', border: 'none' }} />
                   <Bar dataKey="notes" name="笔记篇数" fill="#3B82F6" radius={[4, 4, 0, 0]} maxBarSize={50}>
-                    {/* 直接在柱子上方显示数字 */}
                     <LabelList dataKey="notes" position="top" fill="#64748b" fontSize={12} fontWeight="bold" />
                   </Bar>
                 </BarChart>
@@ -134,17 +137,18 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
           </div>
         )}
 
-        {/* ================= Tab 2: 内容分析 ================= */}
+        {/* ================= Tab 2: 内容分析 (全新重构) ================= */}
         {activeTab === 'content' && (
           <div className="space-y-6 animate-fade-in">
+            {/* 笔记形式 */}
             <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
               <h3 className="text-xs font-bold text-slate-700 mb-4 flex items-center gap-1.5"><Clapperboard size={14}/> 笔记形式占比</h3>
               <div className="flex gap-4 mb-3">
-                <div className="flex-1 bg-white rounded-xl p-4 text-center shadow-sm">
+                <div className="flex-1 bg-white rounded-xl p-4 text-center shadow-sm border border-indigo-50">
                   <div className="text-2xl font-black text-indigo-600">{stats.videoCount}</div>
                   <div className="text-[11px] text-indigo-400 mt-1 font-medium">视频 · {stats.videoPct}%</div>
                 </div>
-                <div className="flex-1 bg-white rounded-xl p-4 text-center shadow-sm">
+                <div className="flex-1 bg-white rounded-xl p-4 text-center shadow-sm border border-emerald-50">
                   <div className="text-2xl font-black text-emerald-600">{stats.imageCount}</div>
                   <div className="text-[11px] text-emerald-400 mt-1 font-medium">图文 · {stats.imagePct}%</div>
                 </div>
@@ -155,18 +159,17 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
               </div>
             </div>
 
-            {/* 修改：放大且单独成行的赛道分布 */}
+            {/* 赛道分布 (动态高度，绝对不拥挤) */}
             <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
-              <h3 className="text-xs font-bold text-slate-700 mb-4 flex items-center gap-1.5">📁 赛道篇数分布 (展开版)</h3>
-              <div style={{ height: `${Math.max(250, stats.noteTypes.length * 40 + 20)}px` }} className="w-full">
+              <h3 className="text-xs font-bold text-slate-700 mb-4 flex items-center gap-1.5">📁 赛道篇数分布</h3>
+              {/* 黑科技：根据数据量自动计算高度，保证每根柱子有充足空间 */}
+              <div className="w-full" style={{ height: Math.max(300, stats.noteTypesByCount.length * 40) }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={stats.noteTypes} layout="vertical" margin={{ left: 10, right: 30 }}>
+                  <BarChart data={stats.noteTypesByCount} layout="vertical" margin={{ left: 10, right: 30 }}>
                     <XAxis type="number" hide />
                     <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748b' }} width={80} />
                     <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ borderRadius: '8px', border: 'none' }} />
-                    {/* 给每个赛道不同的漂亮颜色 */}
-                    <Bar dataKey="count" name="篇数" radius={[0, 6, 6, 0]} barSize={24}>
-                      {stats.noteTypes.map((_, i) => <Cell key={i} fill={['#6366F1', '#10B981', '#F59E0B', '#EF4444', '#A855F7', '#EC4899', '#F97316'][i % 7]} />)}
+                    <Bar dataKey="count" name="篇数" fill="#8B5CF6" radius={[0, 4, 4, 0]} barSize={20}>
                       <LabelList dataKey="count" position="right" fill="#64748b" fontSize={11} fontWeight="bold" />
                     </Bar>
                   </BarChart>
@@ -174,27 +177,20 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
               </div>
             </div>
 
-            {/* 修改：赛道平均互动量，用带数字的排版 */}
+            {/* 赛道平均互动量 (独立全宽图表) */}
             <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
-              <h3 className="text-xs font-bold text-slate-700 mb-5 flex items-center gap-1.5">⚡ 赛道平均互动量排行榜</h3>
-              <div className="space-y-4">
-                {stats.noteTypes.sort((a,b) => b.avgInt - a.avgInt).map((item, i) => {
-                  const maxVal = Math.max(...stats.noteTypes.map(n => n.avgInt));
-                  const pct = maxVal === 0 ? 0 : (item.avgInt / maxVal) * 100;
-                  return (
-                    <div key={i} className="flex items-center gap-3">
-                      <span className="w-5 text-center text-slate-400 font-black text-sm">{i+1}</span>
-                      <span className="w-24 text-xs font-bold text-slate-700 truncate">{item.name}</span>
-                      <div className="flex-1 bg-slate-200 h-2.5 rounded-full overflow-hidden">
-                        <div className="bg-violet-500 h-full rounded-full" style={{ width: `${pct}%` }}></div>
-                      </div>
-                      <div className="text-right w-20">
-                        <span className="font-black text-sm text-slate-800">{formatNum(item.avgInt)}</span>
-                        <span className="text-[10px] text-slate-400 ml-1.5">{item.count}篇</span>
-                      </div>
-                    </div>
-                  );
-                })}
+              <h3 className="text-xs font-bold text-slate-700 mb-4 flex items-center gap-1.5">⚡ 赛道平均互动量</h3>
+              <div className="w-full" style={{ height: Math.max(300, stats.noteTypesByAvgInt.length * 40) }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={stats.noteTypesByAvgInt} layout="vertical" margin={{ left: 10, right: 40 }}>
+                    <XAxis type="number" hide />
+                    <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748b' }} width={80} />
+                    <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ borderRadius: '8px', border: 'none' }} formatter={(val) => formatNum(val as number)} />
+                    <Bar dataKey="avgInt" name="平均互动量" fill="#EC4899" radius={[0, 4, 4, 0]} barSize={20}>
+                      <LabelList dataKey="avgInt" position="right" fill="#64748b" fontSize={11} fontWeight="bold" formatter={formatNum} />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
             </div>
           </div>
@@ -203,7 +199,20 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
         {/* ================= Tab 3: 达人策略 ================= */}
         {activeTab === 'creators' && (
           <div className="space-y-6 animate-fade-in">
-            {/* 修改：美化属性拆解面板 */}
+            {stats.topCreator && (
+              <div className="bg-gradient-to-r from-violet-50 to-indigo-50 rounded-xl p-4 border border-violet-100 flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-1.5 mb-1"><Award size={16} className="text-violet-600" /><span className="text-xs font-bold text-violet-800">最高互动达人揭秘</span></div>
+                  <p className="text-sm font-bold text-slate-800">{stats.topCreator.influencerName}</p>
+                  <p className="text-[11px] text-slate-600 mt-1 truncate max-w-md">爆文: {stats.topCreator.title}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xl font-black text-indigo-600">{formatNum(stats.topCreator.interactions)}</p>
+                  <p className="text-[10px] text-slate-500">斩获互动量</p>
+                </div>
+              </div>
+            )}
+
             <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
               <h3 className="text-xs font-bold text-slate-700 mb-4 flex items-center gap-1.5"><PieIcon size={14}/> 达人属性结构 & 费用拆解</h3>
               <div className="grid gap-4">
@@ -245,14 +254,12 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
               </LineChart>
             </ChartBox>
 
-            {/* 新增：Top 10 达人排行榜 */}
             <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
               <h3 className="text-xs font-bold text-slate-700 mb-4 flex items-center gap-1.5"><Crown size={16} className="text-amber-500"/> 达人爆款互动排行 (Top 10)</h3>
               <div className="bg-white rounded-xl border border-slate-100 overflow-hidden">
                 {stats.top10Notes.map((note, i) => (
                   <div key={i} className="flex items-center justify-between p-3 border-b border-slate-50 hover:bg-slate-50 transition-colors">
                     <div className="flex items-center gap-3">
-                      {/* 排名勋章 */}
                       <div className={`w-6 h-6 rounded-md flex items-center justify-center text-xs font-black ${i===0?'bg-amber-100 text-amber-600':i===1?'bg-slate-200 text-slate-600':i===2?'bg-orange-100 text-orange-600':'bg-slate-50 text-slate-400'}`}>
                         {i+1}
                       </div>
@@ -293,16 +300,12 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
               </div>
             </div>
 
-            {/* 修改：全部月份时双Y轴加 CPE */}
             <ChartBox title={stats.isDaily ? "每日预估费用推移" : "月度预估费用与 CPE 推移 (双轴)"}>
               <LineChart data={stats.trends}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="timeLabel" axisLine={false} tickLine={false} tick={{ fontSize: 11 }} />
-                
                 <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#10B981' }} width={40} tickFormatter={(v)=>'¥'+formatNum(v)} />
-                {/* 如果是全部月份，展示右侧的 CPE 轴 */}
                 {!stats.isDaily && <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#F59E0B' }} width={30} />}
-                
                 <Tooltip contentStyle={{ borderRadius: '8px', border: 'none' }} />
                 <Legend iconType="circle" wrapperStyle={{ fontSize: '12px' }} />
                 <Line yAxisId="left" type="monotone" name="预估费用" dataKey="cost" stroke="#10B981" strokeWidth={3} dot={{ r: 3 }} />
