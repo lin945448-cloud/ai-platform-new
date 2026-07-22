@@ -1,6 +1,7 @@
 export interface NoteRecord {
   publishTime: string;
-  month: string;
+  date: string;       // 新增：精确到天 (YYYY-MM-DD)
+  month: string;      // 精确到月 (YYYY-MM)
   title: string;
   noteForm: string;
   reportedBrand: string;
@@ -27,16 +28,6 @@ export interface ParsedData {
   influencerCount: number;
   brands: string[];
   months: string[];
-  fanTiers: { name: string; value: number }[];
-  creatorTypes: { name: string; value: number }[];
-  topCreator: NoteRecord | null;
-  repeatedCreators: number;
-  cpe: number;
-  cpf: number;
-  medianCost: number;
-  videoCount: number;
-  imageCount: number;
-  brandStats: any[];
 }
 
 export interface ChatMessage {
