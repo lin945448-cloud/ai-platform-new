@@ -58,7 +58,7 @@ export default function App() {
           <Dashboard data={data} selectedCommercial={selectedCommercial} selectedBrand={selectedBrand} selectedMonth={selectedMonth} />
         </div>
         <div className="flex flex-col h-full shadow-sm" style={{ flex: 1 }}>
-          {/* 修改：把 selectedCommercial 传给 AIPanel */}
+          {/* 重点：这里把 selectedCommercial 传给了 AIPanel */}
           <AIPanel data={data} selectedCommercial={selectedCommercial} selectedBrand={selectedBrand} selectedMonth={selectedMonth} />
         </div>
       </div>
