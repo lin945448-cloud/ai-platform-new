@@ -55,7 +55,7 @@ export const NotesTable: React.FC<Props> = ({ records }) => {
                 <th className="py-3 px-4 text-[11px] font-bold text-slate-500">评论</th>
                 <th className="py-3 px-4 text-[11px] font-bold text-slate-500">收藏</th>
                 <th className="py-3 px-4 text-[11px] font-bold text-slate-500">分享</th>
-                <th className="py-3 px-4 text-[11px] font-bold text-slate-500 text-center">操作</th>
+                <th className="py-3 px-4 text-[11px] font-bold text-slate-500 text-center">笔记链接</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
