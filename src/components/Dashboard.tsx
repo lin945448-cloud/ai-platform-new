@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { ParsedData } from '../types';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, LabelList, PieChart, Pie, Cell } from 'recharts';
-import { Users, FileText, Zap, DollarSign, LayoutDashboard, List, Clapperboard, Image as ImageIcon, PieChart as PieIcon, ThumbsUp, MessageCircle, Star, Share2, Crown, Award } from 'lucide-react';
+import { Users, FileText, Zap, DollarSign, LayoutDashboard, List, Clapperboard, Image as ImageIcon, PieChart as PieIcon, ThumbsUp, MessageCircle, Star, Share2, Crown, Award, ExternalLink } from 'lucide-react';
 import { NotesTable } from './NotesTable';
 
 interface Props { data: ParsedData; selectedCommercial: string; selectedBrand: string; selectedMonth: string; }
@@ -28,6 +28,8 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
     const collects = filteredRecords.reduce((s, r) => s + r.collects, 0);
     const shares = filteredRecords.reduce((s, r) => s + r.shares, 0);
     const cpe = interactions > 0 ? (cost / interactions).toFixed(2) : '0.00';
+    // 新增：提取独立达人数
+    const influencerCount = new Set(filteredRecords.map(r => r.influencerId)).size;
 
     const timeUnit = selectedMonth === '全部' ? 'month' : 'date';
     const trendMap = new Map();
@@ -69,14 +71,13 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
       cpe: v.interactions > 0 ? (v.cost / v.interactions).toFixed(2) : 0 
     })).sort((a, b) => a.time.localeCompare(b.time));
 
-    // 修复 Bug 的关键：分离出两个不同的数组，不直接在渲染时 sort
     const baseNoteTypes = Array.from(typeMap.values()).map(v => ({ ...v, avgInt: Math.round(v.totalInt / v.count) }));
     const noteTypesByCount = [...baseNoteTypes].sort((a, b) => b.count - a.count);
     const noteTypesByAvgInt = [...baseNoteTypes].sort((a, b) => b.avgInt - a.avgInt);
 
     const creatorAttrs = Array.from(creatorAttrMap.values()).map(v => ({ ...v, tiers: Array.from(v.fanTiers.entries()).map(([k, t]: any) => ({ name: k, ...t })) })).sort((a, b) => b.count - a.count);
 
-    return { notes, interactions, cost, cpe, likes, comments, collects, shares, trends, noteTypesByCount, noteTypesByAvgInt, creatorAttrs, top10Notes, topCreator, videoCount, imageCount, videoPct: notes > 0 ? Math.round((videoCount / notes) * 100) : 0, imagePct: notes > 0 ? Math.round((imageCount / notes) * 100) : 0, isDaily: timeUnit === 'date' };
+    return { notes, interactions, cost, cpe, likes, comments, collects, shares, influencerCount, trends, noteTypesByCount, noteTypesByAvgInt, creatorAttrs, top10Notes, topCreator, videoCount, imageCount, videoPct: notes > 0 ? Math.round((videoCount / notes) * 100) : 0, imagePct: notes > 0 ? Math.round((imageCount / notes) * 100) : 0, isDaily: timeUnit === 'date' };
   }, [filteredRecords, selectedMonth]);
 
   if (data.totalNotes === 0) return <div className="h-full bg-white rounded-2xl flex justify-center items-center text-slate-400 font-bold">请先上传数据文件</div>;
@@ -108,7 +109,7 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
               <StatCard icon={<Share2/>} title="总分享数" value={formatNum(stats.shares)} color="text-cyan-500" bg="bg-cyan-50" />
             </div>
 
-            <ChartBox title={stats.isDaily ? "每日互动与分享趋势" : "月度互动与分享推移"}>
+            <ChartBox title={stats.isDaily ? "每日互动与分享趋势 (双轴)" : "月度互动与分享推移 (双轴)"}>
               <LineChart data={stats.trends}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="timeLabel" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#94a3b8' }} />
@@ -122,8 +123,9 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
             </ChartBox>
 
             {!stats.isDaily && (
-              <ChartBox title="月度笔记总数推移">
-                <BarChart data={stats.trends}>
+              <ChartBox title="月度笔记总数推移 (直观数据)">
+                {/* 增加 margin top，防止数字被遮挡！ */}
+                <BarChart data={stats.trends} margin={{ top: 25 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                   <XAxis dataKey="timeLabel" axisLine={false} tickLine={false} tick={{ fontSize: 11 }} />
                   <YAxis hide />
@@ -137,10 +139,9 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
           </div>
         )}
 
-        {/* ================= Tab 2: 内容分析 (全新重构) ================= */}
+        {/* ================= Tab 2: 内容分析 ================= */}
         {activeTab === 'content' && (
           <div className="space-y-6 animate-fade-in">
-            {/* 笔记形式 */}
             <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
               <h3 className="text-xs font-bold text-slate-700 mb-4 flex items-center gap-1.5"><Clapperboard size={14}/> 笔记形式占比</h3>
               <div className="flex gap-4 mb-3">
@@ -159,10 +160,8 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
               </div>
             </div>
 
-            {/* 赛道分布 (动态高度，绝对不拥挤) */}
             <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
               <h3 className="text-xs font-bold text-slate-700 mb-4 flex items-center gap-1.5">📁 赛道篇数分布</h3>
-              {/* 黑科技：根据数据量自动计算高度，保证每根柱子有充足空间 */}
               <div className="w-full" style={{ height: Math.max(300, stats.noteTypesByCount.length * 40) }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={stats.noteTypesByCount} layout="vertical" margin={{ left: 10, right: 30 }}>
@@ -177,8 +176,8 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
               </div>
             </div>
 
-            {/* 赛道篇均互动量 (独立全宽图表) */}
             <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+              {/* 文案修改为：赛道篇均互动量 */}
               <h3 className="text-xs font-bold text-slate-700 mb-4 flex items-center gap-1.5">⚡ 赛道篇均互动量</h3>
               <div className="w-full" style={{ height: Math.max(300, stats.noteTypesByAvgInt.length * 40) }}>
                 <ResponsiveContainer width="100%" height="100%">
@@ -186,7 +185,7 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
                     <XAxis type="number" hide />
                     <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748b' }} width={80} />
                     <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ borderRadius: '8px', border: 'none' }} formatter={(val) => formatNum(val as number)} />
-                    <Bar dataKey="avgInt" name="篇均互动量" fill="#EC4899" radius={[0, 4, 4, 0]} barSize={20}>
+                    <Bar dataKey="avgInt" name="平均互动量" fill="#EC4899" radius={[0, 4, 4, 0]} barSize={20}>
                       <LabelList dataKey="avgInt" position="right" fill="#64748b" fontSize={11} fontWeight="bold" formatter={formatNum} />
                     </Bar>
                   </BarChart>
@@ -202,7 +201,7 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
             {stats.topCreator && (
               <div className="bg-gradient-to-r from-violet-50 to-indigo-50 rounded-xl p-4 border border-violet-100 flex items-center justify-between">
                 <div>
-                  <div className="flex items-center gap-1.5 mb-1"><Award size={16} className="text-violet-600" /><span className="text-xs font-bold text-violet-800">最高互动达人</span></div>
+                  <div className="flex items-center gap-1.5 mb-1"><Award size={16} className="text-violet-600" /><span className="text-xs font-bold text-violet-800">最高互动达人揭秘</span></div>
                   <p className="text-sm font-bold text-slate-800">{stats.topCreator.influencerName}</p>
                   <p className="text-[11px] text-slate-600 mt-1 truncate max-w-md">爆文: {stats.topCreator.title}</p>
                 </div>
@@ -212,6 +211,25 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
                 </div>
               </div>
             )}
+
+            {/* 新增：总达人与费用概览卡片 */}
+            <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center"><Users className="text-indigo-500" size={20}/></div>
+                <div>
+                  <p className="text-[11px] text-slate-500 mb-0.5">合作达人总数</p>
+                  <p className="text-xl font-black text-slate-800">{stats.influencerCount} <span className="text-xs font-normal text-slate-400">人</span></p>
+                </div>
+              </div>
+              <div className="h-8 w-px bg-slate-100"></div>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center"><DollarSign className="text-emerald-500" size={20}/></div>
+                <div>
+                  <p className="text-[11px] text-slate-500 mb-0.5">达人预估总花费</p>
+                  <p className="text-xl font-black text-emerald-600">¥{formatNum(stats.cost)}</p>
+                </div>
+              </div>
+            </div>
 
             <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
               <h3 className="text-xs font-bold text-slate-700 mb-4 flex items-center gap-1.5"><PieIcon size={14}/> 达人属性结构 & 费用拆解</h3>
@@ -271,9 +289,19 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
                         <p className="text-[10px] text-slate-500 mt-0.5">{note.influencerType} · {formatNum(note.followers)}粉</p>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-sm font-black text-indigo-600">{formatNum(note.interactions)}</p>
-                      <p className="text-[10px] text-slate-400">互动</p>
+                    {/* 修改：右侧加入了一键访问链接按钮 */}
+                    <div className="flex items-center gap-4 text-right">
+                      <div>
+                        <p className="text-sm font-black text-indigo-600">{formatNum(note.interactions)}</p>
+                        <p className="text-[10px] text-slate-400">互动</p>
+                      </div>
+                      {note.noteLink && note.noteLink !== '未知' ? (
+                        <a href={note.noteLink} target="_blank" rel="noreferrer" className="w-8 h-8 flex items-center justify-center rounded-lg bg-indigo-50 text-indigo-500 hover:bg-indigo-100 transition-colors" title="查看小红书笔记">
+                          <ExternalLink size={14} />
+                        </a>
+                      ) : (
+                        <div className="w-8 h-8"></div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -300,7 +328,7 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
               </div>
             </div>
 
-            <ChartBox title={stats.isDaily ? "每日预估费用推移" : "月度预估费用与 CPE 推移"}>
+            <ChartBox title={stats.isDaily ? "每日预估费用推移" : "月度预估费用与 CPE 推移 (双轴)"}>
               <LineChart data={stats.trends}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="timeLabel" axisLine={false} tickLine={false} tick={{ fontSize: 11 }} />
