@@ -2,11 +2,10 @@ import React, { useState } from 'react';
 import { ParsedData } from './types';
 import { getEmptyData } from './utils/parseData';
 import { Activity, Filter } from 'lucide-react';
-// 引入刚刚写好的真实上传组件
 import { UploadBar } from './components/UploadBar';
+import { Dashboard } from './components/Dashboard';
 
-// 剩下的这两个图表和AI还是占位符，下一批就换它们！
-const DashboardPlaceholder = () => <div className="h-full bg-white rounded-2xl border border-slate-100 flex items-center justify-center text-slate-400 font-bold text-lg">📊 正在组装：多维度可视化数据看板...</div>;
+// 只剩下 AI 还是占位符了，马上就搞定它！
 const AIPanelPlaceholder = () => <div className="h-full bg-white rounded-2xl border border-slate-100 flex items-center justify-center text-slate-400 font-bold text-lg">🧠 正在组装：DeepSeek AI 商业洞察大脑...</div>;
 
 export default function App() {
@@ -27,7 +26,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* 动态渲染下拉框选项 */}
         {data.totalNotes > 0 && (
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1.5 bg-slate-100 border border-slate-200 rounded-lg px-3 py-1.5">
@@ -47,13 +45,13 @@ export default function App() {
       </header>
 
       <div className="flex-shrink-0 px-6 py-4">
-        {/* 真实的上传组件！ */}
         <UploadBar onDataLoaded={setData} currentData={data} />
       </div>
 
       <div className="flex-1 flex gap-5 px-6 pb-5 overflow-hidden min-h-0">
         <div className="flex flex-col h-full shadow-sm" style={{ width: '55%' }}>
-          <DashboardPlaceholder />
+          {/* 真实的看板装填完毕！ */}
+          <Dashboard data={data} selectedBrand={selectedBrand} selectedMonth={selectedMonth} />
         </div>
         <div className="flex flex-col h-full shadow-sm" style={{ flex: 1 }}>
           <AIPanelPlaceholder />
