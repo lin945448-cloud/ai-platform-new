@@ -4,10 +4,11 @@ import { getEmptyData } from './utils/parseData';
 import { Activity, Filter } from 'lucide-react';
 import { UploadBar } from './components/UploadBar';
 import { Dashboard } from './components/Dashboard';
-import { AIPanel } from './components/AIPanel'; // 引入真实的 AI 面板！
+import { AIPanel } from './components/AIPanel';
 
 export default function App() {
   const [data, setData] = useState<ParsedData>(getEmptyData());
+  const [selectedCommercial, setSelectedCommercial] = useState<string>('全部'); // 新增：是否商业笔记
   const [selectedBrand, setSelectedBrand] = useState<string>('全部');
   const [selectedMonth, setSelectedMonth] = useState<string>('全部');
 
@@ -28,6 +29,13 @@ export default function App() {
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1.5 bg-slate-100 border border-slate-200 rounded-lg px-3 py-1.5">
               <Filter size={14} className="text-slate-500" />
+              {/* 新增：是否商业笔记 */}
+              <select value={selectedCommercial} onChange={(e) => setSelectedCommercial(e.target.value)} className="bg-transparent text-xs font-bold text-slate-700 outline-none cursor-pointer">
+                <option value="全部">全部笔记性质</option>
+                <option value="是">仅商业笔记 (是)</option>
+                <option value="否">仅非商业笔记 (否)</option>
+              </select>
+              <div className="w-px h-3 bg-slate-300 mx-1" />
               <select value={selectedBrand} onChange={(e) => setSelectedBrand(e.target.value)} className="bg-transparent text-xs font-bold text-slate-700 outline-none cursor-pointer">
                 <option value="全部">全局横向对比</option>
                 {data.brands.map(b => <option key={b} value={b}>{b}</option>)}
@@ -48,10 +56,10 @@ export default function App() {
 
       <div className="flex-1 flex gap-5 px-6 pb-5 overflow-hidden min-h-0">
         <div className="flex flex-col h-full shadow-sm" style={{ width: '55%' }}>
-          <Dashboard data={data} selectedBrand={selectedBrand} selectedMonth={selectedMonth} />
+          {/* 将新属性传入 Dashboard */}
+          <Dashboard data={data} selectedCommercial={selectedCommercial} selectedBrand={selectedBrand} selectedMonth={selectedMonth} />
         </div>
         <div className="flex flex-col h-full shadow-sm" style={{ flex: 1 }}>
-          {/* 终极合体！真实的 AI 面板装填完毕 */}
           <AIPanel data={data} selectedBrand={selectedBrand} selectedMonth={selectedMonth} />
         </div>
       </div>
