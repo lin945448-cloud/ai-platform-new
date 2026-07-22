@@ -17,11 +17,12 @@ export const UploadBar: React.FC<Props> = ({ onDataLoaded, currentData }) => {
   const processFiles = useCallback(async (files: FileList | File[]) => {
     if (files.length === 0) return;
     setState('processing');
-    setInfo(`正在读取 ${files.length} 个文件...`);
+    setInfo(`正在读取并合并 ${files.length} 个文件...`);
 
     try {
       let allRows: any[] = [];
 
+      // 循环读取你上传的所有文件，自动合为一体！
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         const data = await file.arrayBuffer();
@@ -34,12 +35,11 @@ export const UploadBar: React.FC<Props> = ({ onDataLoaded, currentData }) => {
 
       if (allRows.length === 0) throw new Error('表格中没有数据');
 
-      // 这里就是调用我们刚刚写的翻译官！
       const analyzed = analyzeData(allRows);
       onDataLoaded(analyzed);
       
       setState('success');
-      setInfo(`成功解析 ${files.length} 个文件`);
+      setInfo(`成功合并解析 ${files.length} 个文件`);
     } catch (e: any) {
       setState('error');
       setInfo(e.message || '文件解析失败，请检查格式');
@@ -91,14 +91,14 @@ export const UploadBar: React.FC<Props> = ({ onDataLoaded, currentData }) => {
         {state === 'idle' && (
           <div>
             <p className="text-[15px] font-bold text-slate-700">拖放或点击上传 Excel / CSV 数据文件</p>
-            <p className="text-xs text-slate-400 mt-1">支持多文件合并分析 · 本地浏览器解析，数据绝不上传，安全私密</p>
+            <p className="text-xs text-indigo-500 font-bold mt-1">✨ 支持同时拖入、选中多个文件！系统会自动将多个文件合并去重分析。</p>
           </div>
         )}
         {state === 'processing' && <p className="text-[15px] font-bold text-slate-700">{info}</p>}
         {state === 'success' && (
           <div>
             <div className="flex items-center gap-2">
-              <p className="text-[15px] font-bold text-slate-700">数据载入就绪！</p>
+              <p className="text-[15px] font-bold text-slate-700">数据合体就绪！</p>
               <span className="text-[11px] font-medium bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full flex items-center gap-1"><Layers size={10} /> {info}</span>
             </div>
             <p className="text-xs text-slate-500 mt-1">
@@ -111,7 +111,7 @@ export const UploadBar: React.FC<Props> = ({ onDataLoaded, currentData }) => {
 
       <div className="flex-shrink-0">
         <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 text-sm text-white bg-slate-800 hover:bg-slate-900 px-5 py-2.5 rounded-xl transition-all shadow-md font-medium">
-          <FileSpreadsheet size={16} /> 选择表格
+          <FileSpreadsheet size={16} /> 选择单个或多个文件
         </button>
       </div>
     </div>
