@@ -2,14 +2,15 @@ import React, { useState, useRef, useEffect } from 'react';
 import { ParsedData, ChatMessage } from '../types';
 import { Bot, Sparkles, RotateCcw } from 'lucide-react';
 
+// 修改：接收数组参数
 interface Props {
   data: ParsedData;
   selectedCommercial: string;
-  selectedBrand: string;
-  selectedMonth: string;
+  selectedBrands: string[];
+  selectedMonths: string[];
 }
 
-export const AIPanel: React.FC<Props> = ({ data, selectedCommercial, selectedBrand, selectedMonth }) => {
+export const AIPanel: React.FC<Props> = ({ data, selectedCommercial, selectedBrands, selectedMonths }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -19,12 +20,12 @@ export const AIPanel: React.FC<Props> = ({ data, selectedCommercial, selectedBra
   }, [messages, isTyping]);
 
   const handleGenerateReport = async () => {
-    // 真正用到了全部 3 个筛选条件！
+    // 过滤逻辑同步更新为数组判断
     const records = data.records.filter(r => {
       const isCom = (r as any).isCommercial;
       const matchCom = selectedCommercial === '全部' || isCom === selectedCommercial;
-      const matchBrand = selectedBrand === '全部' || r.reportedBrand === selectedBrand;
-      const matchMonth = selectedMonth === '全部' || r.month === selectedMonth;
+      const matchBrand = selectedBrands.length === 0 || selectedBrands.includes(r.reportedBrand);
+      const matchMonth = selectedMonths.length === 0 || selectedMonths.includes(r.month);
       return matchCom && matchBrand && matchMonth;
     });
     
@@ -37,11 +38,9 @@ export const AIPanel: React.FC<Props> = ({ data, selectedCommercial, selectedBra
     const cpe = interactions > 0 ? (cost / interactions).toFixed(2) : 0;
     const cpf = totalFollowers > 0 ? (cost / totalFollowers).toFixed(2) : 0;
     
-    // 计算视频图文比例
     let videoCount = 0; let imageCount = 0;
     records.forEach(r => r.noteForm.includes('视频') ? videoCount++ : imageCount++);
     
-    // 计算复投达人数
     const creatorMap = new Map<string, number>();
     records.forEach(r => creatorMap.set(r.influencerId, (creatorMap.get(r.influencerId) || 0) + 1));
     const repeatedCount = Array.from(creatorMap.values()).filter(c => c > 1).length;
@@ -50,7 +49,7 @@ export const AIPanel: React.FC<Props> = ({ data, selectedCommercial, selectedBra
     const topRecord = records.reduce((p, c) => p.interactions > c.interactions ? p : c);
 
     const prompt = `
-筛选视角：【品牌：${selectedBrand}】 | 【月份：${selectedMonth}】 | 【性质：${selectedCommercial==='全部'?'全部笔记':selectedCommercial==='是'?'仅商业笔记':'非商业'}】
+筛选视角：【品牌：${selectedBrands.length===0?'全部':selectedBrands.join('、')}】 | 【月份：${selectedMonths.length===0?'全部':selectedMonths.join('、')}】 | 【性质：${selectedCommercial==='全部'?'全部笔记':selectedCommercial==='是'?'仅商业笔记':'非商业'}】
 
 客观数据指标（请在报告中引用以下数据）：
 - 共 ${records.length} 篇笔记，其中视频 ${videoCount} 支，图文 ${imageCount} 篇。
@@ -85,7 +84,7 @@ export const AIPanel: React.FC<Props> = ({ data, selectedCommercial, selectedBra
 ### 6. 机会与行动建议
 具体可执行建议：优先合作哪类达人？复投建议？内容形式建议？`;
 
-    setMessages([{ role: 'user', content: `基于筛选（${selectedCommercial==='全部'?'全部':selectedCommercial==='是'?'商业':'非商业'}）生成分析。`, timestamp: new Date() }]);
+    setMessages([{ role: 'user', content: `基于当前所有筛选条件，生成深度商业分析报告。`, timestamp: new Date() }]);
     setIsTyping(true);
 
     try {
@@ -143,7 +142,7 @@ export const AIPanel: React.FC<Props> = ({ data, selectedCommercial, selectedBra
           </div>
           <div>
             <h2 className="text-sm font-bold text-slate-800">DeepSeek 商业洞察大脑</h2>
-            <p className="text-[10px] text-slate-400">联动左侧面板数据动态推理</p>
+            <p className="text-[10px] text-slate-400">联动多重筛选动态推理</p>
           </div>
         </div>
         {messages.length > 0 && (
@@ -156,11 +155,10 @@ export const AIPanel: React.FC<Props> = ({ data, selectedCommercial, selectedBra
           <div className="flex flex-col items-center justify-center h-full text-center px-4">
             <Bot size={40} className="text-violet-200 mb-3" />
             <p className="text-sm font-bold text-slate-700 mb-1">AI 引擎准备就绪</p>
-            <p className="text-[11px] text-slate-500 mb-4 max-w-[200px]">当前会准确读取【商业笔记】及【复投达人】等深度数据</p>
             <button
               onClick={handleGenerateReport}
               disabled={data.totalNotes === 0}
-              className="flex items-center gap-2 bg-slate-800 hover:bg-slate-900 disabled:bg-slate-300 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition-all shadow-md active:scale-95"
+              className="mt-4 flex items-center gap-2 bg-slate-800 hover:bg-slate-900 disabled:bg-slate-300 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition-all shadow-md active:scale-95"
             >
               <Sparkles size={16} /> 生成深度报告
             </button>
@@ -184,7 +182,7 @@ export const AIPanel: React.FC<Props> = ({ data, selectedCommercial, selectedBra
               <div className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce" />
               <div className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '150ms' }} />
               <div className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '300ms' }} />
-              <span className="text-[11px] text-slate-400 ml-2">DeepSeek 模型深度拆解中...</span>
+              <span className="text-[11px] text-slate-400 ml-2">模型推理中，预计需要 15 秒...</span>
             </div>
           </div>
         )}
