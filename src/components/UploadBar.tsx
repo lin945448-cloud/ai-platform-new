@@ -1,8 +1,9 @@
 import React, { useRef, useState, useCallback } from 'react';
-import { Upload, CheckCircle, AlertCircle, FileSpreadsheet, Layers } from 'lucide-react';
+import { Upload, CheckCircle, AlertCircle, FileSpreadsheet, Layers, Database } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { ParsedData } from '../types';
 import { analyzeData, getEmptyData } from '../utils/parseData';
+import { getSampleRawRows } from '../utils/sampleData';
 
 interface Props {
   onDataLoaded: (data: ParsedData) => void;
@@ -22,7 +23,6 @@ export const UploadBar: React.FC<Props> = ({ onDataLoaded, currentData }) => {
     try {
       let allRows: any[] = [];
 
-      // 循环读取你上传的所有文件，自动合为一体！
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         const data = await file.arrayBuffer();
@@ -46,6 +46,26 @@ export const UploadBar: React.FC<Props> = ({ onDataLoaded, currentData }) => {
       onDataLoaded(getEmptyData());
     }
   }, [onDataLoaded]);
+
+  // 新增：一键加载内置的示例数据
+  const handleLoadSample = () => {
+    setState('processing');
+    setInfo('正在加载内置示例数据，请稍候...');
+    
+    // 用个小延时做个假加载动画，让体验更逼真
+    setTimeout(() => {
+      try {
+        const sampleRows = getSampleRawRows();
+        const analyzed = analyzeData(sampleRows);
+        onDataLoaded(analyzed);
+        setState('success');
+        setInfo('示例数据加载完毕，快去体验吧！');
+      } catch (e: any) {
+        setState('error');
+        setInfo('示例数据加载失败，格式可能有误');
+      }
+    }, 600);
+  };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -91,7 +111,7 @@ export const UploadBar: React.FC<Props> = ({ onDataLoaded, currentData }) => {
         {state === 'idle' && (
           <div>
             <p className="text-[15px] font-bold text-slate-700">拖放或点击上传 Excel / CSV 数据文件</p>
-            <p className="text-xs text-indigo-500 font-bold mt-1">✨ 仅支持分析千瓜后台导出的品牌达人数据。可以同时拖入、Ctrl选中多个文件！系统会自动将多个文件合并去重分析。</p>
+            <p className="text-xs text-indigo-500 font-bold mt-1">✨ 仅支持分析千瓜后台导出的品牌达人数据。可以同时拖入、Ctrl选中多个文件！</p>
           </div>
         )}
         {state === 'processing' && <p className="text-[15px] font-bold text-slate-700">{info}</p>}
@@ -109,9 +129,15 @@ export const UploadBar: React.FC<Props> = ({ onDataLoaded, currentData }) => {
         {state === 'error' && <p className="text-[15px] font-bold text-red-600">{info}</p>}
       </div>
 
-      <div className="flex-shrink-0">
+      {/* 修改：在原有按钮旁边增加了“加载示例数据”按钮，使用 flex gap-3 并排摆放 */}
+      <div className="flex-shrink-0 flex items-center gap-3">
+        {state === 'idle' && (
+          <button onClick={handleLoadSample} className="flex items-center gap-2 text-sm text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 px-4 py-2.5 rounded-xl transition-all shadow-sm font-bold">
+            <Database size={16} /> 体验示例数据
+          </button>
+        )}
         <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 text-sm text-white bg-slate-800 hover:bg-slate-900 px-5 py-2.5 rounded-xl transition-all shadow-md font-medium">
-          <FileSpreadsheet size={16} /> 选择单个或多个文件
+          <FileSpreadsheet size={16} /> 选择多个文件
         </button>
       </div>
     </div>
