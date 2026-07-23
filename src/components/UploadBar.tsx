@@ -91,7 +91,7 @@ export const UploadBar: React.FC<Props> = ({ onDataLoaded, currentData }) => {
         {state === 'idle' && (
           <div>
             <p className="text-[15px] font-bold text-slate-700">拖放或点击上传 Excel / CSV 数据文件</p>
-            <p className="text-xs text-indigo-500 font-bold mt-1">✨ 支持同时拖入、选中多个文件！系统会自动将多个文件合并去重分析。</p>
+            <p className="text-xs text-indigo-500 font-bold mt-1">✨ 仅支持分析千瓜后台导出的品牌达人数据。可以同时拖入、Ctrl选中多个文件！系统会自动将多个文件合并去重分析。</p>
           </div>
         )}
         {state === 'processing' && <p className="text-[15px] font-bold text-slate-700">{info}</p>}
