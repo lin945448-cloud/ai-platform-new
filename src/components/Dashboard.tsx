@@ -4,20 +4,22 @@ import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContai
 import { Users, FileText, Zap, DollarSign, LayoutDashboard, List, Clapperboard, Image as ImageIcon, PieChart as PieIcon, ThumbsUp, MessageCircle, Star, Share2, Crown, Award, ExternalLink, Repeat } from 'lucide-react';
 import { NotesTable } from './NotesTable';
 
-interface Props { data: ParsedData; selectedCommercial: string; selectedBrand: string; selectedMonth: string; }
+// 接收多选数组
+interface Props { data: ParsedData; selectedCommercial: string; selectedBrands: string[]; selectedMonths: string[]; }
 
-export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedBrand, selectedMonth }) => {
+export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedBrands, selectedMonths }) => {
   const [activeTab, setActiveTab] = useState<'overview' | 'content' | 'creators' | 'cost' | 'details'>('overview');
 
   const filteredRecords = useMemo(() => {
     return data.records.filter(r => {
       const isCom = (r as any).isCommercial;
       const matchCom = selectedCommercial === '全部' || isCom === selectedCommercial;
-      const matchBrand = selectedBrand === '全部' || r.reportedBrand === selectedBrand;
-      const matchMonth = selectedMonth === '全部' || r.month === selectedMonth;
+      // 修改：如果数组为空代表全选，否则判断是否在数组内
+      const matchBrand = selectedBrands.length === 0 || selectedBrands.includes(r.reportedBrand);
+      const matchMonth = selectedMonths.length === 0 || selectedMonths.includes(r.month);
       return matchCom && matchBrand && matchMonth;
     });
-  }, [data.records, selectedCommercial, selectedBrand, selectedMonth]);
+  }, [data.records, selectedCommercial, selectedBrands, selectedMonths]);
 
   const stats = useMemo(() => {
     const notes = filteredRecords.length;
@@ -30,7 +32,7 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
     const cpe = interactions > 0 ? (cost / interactions).toFixed(2) : '0.00';
     const influencerCount = new Set(filteredRecords.map(r => r.influencerId)).size;
 
-    const timeUnit = selectedMonth === '全部' ? 'month' : 'date';
+    const timeUnit = selectedMonths.length === 1 ? 'date' : 'month'; // 如果只选了一个月，就按天展示
     const trendMap = new Map();
     const typeMap = new Map();
     const creatorAttrMap = new Map();
@@ -45,7 +47,6 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
       if (r.interactions > maxInter) { maxInter = r.interactions; topCreator = r; }
       if (r.noteForm.includes('视频')) videoCount++; else imageCount++;
 
-      // 修改：这里加入了 xhsUrl 供复投达人跳转使用
       const cInfo = creatorNotesMap.get(r.influencerId) || { count: 0, name: r.influencerName, type: r.influencerType, followers: r.followers, xhsUrl: (r as any).xhsUrl };
       cInfo.count += 1;
       creatorNotesMap.set(r.influencerId, cInfo);
@@ -84,10 +85,11 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
     const creatorAttrs = Array.from(creatorAttrMap.values()).map(v => ({ ...v, tiers: Array.from(v.fanTiers.entries()).map(([k, t]: any) => ({ name: k, ...t })) })).sort((a, b) => b.count - a.count);
 
     return { notes, interactions, cost, cpe, likes, comments, collects, shares, influencerCount, repeatedCreators, trends, noteTypesByCount, noteTypesByAvgInt, creatorAttrs, top10Notes, topCreator, videoCount, imageCount, videoPct: notes > 0 ? Math.round((videoCount / notes) * 100) : 0, imagePct: notes > 0 ? Math.round((imageCount / notes) * 100) : 0, isDaily: timeUnit === 'date' };
-  }, [filteredRecords, selectedMonth]);
+  }, [filteredRecords, selectedMonths]);
 
   if (data.totalNotes === 0) return <div className="h-full bg-white rounded-2xl flex justify-center items-center text-slate-400 font-bold">请先上传数据文件</div>;
   const formatNum = (n: number) => n >= 10000 ? (n / 10000).toFixed(1) + 'w' : n.toLocaleString();
+  const formatComma = (n: number) => Number(n).toLocaleString(); // 用于 Tooltip 加千位分隔符
 
   return (
     <div className="h-full bg-white rounded-2xl border border-slate-100 p-4 flex flex-col overflow-hidden">
@@ -101,7 +103,7 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
 
       <div className="flex-1 overflow-y-auto custom-scroll pr-2 space-y-6 pb-10">
         
-        {/* ================= 数据总览 & 内容分析 保持不变 ================= */}
+        {/* ================= Tab 1: 数据总览 ================= */}
         {activeTab === 'overview' && (
           <div className="space-y-6 animate-fade-in">
             <div className="grid grid-cols-4 gap-3">
@@ -121,7 +123,8 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
                 <XAxis dataKey="timeLabel" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#94a3b8' }} />
                 <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#6366F1' }} width={40} tickFormatter={formatNum} />
                 <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#14B8A6' }} width={40} tickFormatter={formatNum} />
-                <Tooltip contentStyle={{ borderRadius: '8px', border: 'none' }} />
+                {/* 增加千位分隔符 */}
+                <Tooltip formatter={(value: number) => formatComma(value)} contentStyle={{ borderRadius: '8px', border: 'none' }} />
                 <Legend iconType="circle" wrapperStyle={{ fontSize: '12px' }} />
                 <Line yAxisId="left" type="monotone" name="互动量" dataKey="interactions" stroke="#6366F1" strokeWidth={3} dot={{ r: 3 }} />
                 <Line yAxisId="right" type="monotone" name="分享数" dataKey="shares" stroke="#14B8A6" strokeWidth={3} dot={{ r: 3 }} />
@@ -134,9 +137,9 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                   <XAxis dataKey="timeLabel" axisLine={false} tickLine={false} tick={{ fontSize: 11 }} />
                   <YAxis hide />
-                  <Tooltip cursor={{ fill: '#f8fafc' }} contentStyle={{ borderRadius: '8px', border: 'none' }} />
+                  <Tooltip formatter={(value: number) => formatComma(value)} cursor={{ fill: '#f8fafc' }} contentStyle={{ borderRadius: '8px', border: 'none' }} />
                   <Bar dataKey="notes" name="笔记篇数" fill="#3B82F6" radius={[4, 4, 0, 0]} maxBarSize={50}>
-                    <LabelList dataKey="notes" position="top" fill="#64748b" fontSize={12} fontWeight="bold" />
+                    <LabelList dataKey="notes" position="top" fill="#64748b" fontSize={12} fontWeight="bold" formatter={formatComma} />
                   </Bar>
                 </BarChart>
               </ChartBox>
@@ -144,6 +147,7 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
           </div>
         )}
 
+        {/* ================= Tab 2: 内容分析 ================= */}
         {activeTab === 'content' && (
           <div className="space-y-6 animate-fade-in">
             <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
@@ -171,9 +175,9 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
                   <BarChart data={stats.noteTypesByCount} layout="vertical" margin={{ left: 10, right: 30 }}>
                     <XAxis type="number" hide />
                     <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748b' }} width={80} />
-                    <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ borderRadius: '8px', border: 'none' }} />
+                    <Tooltip formatter={(value: number) => formatComma(value)} cursor={{ fill: 'transparent' }} contentStyle={{ borderRadius: '8px', border: 'none' }} />
                     <Bar dataKey="count" name="篇数" fill="#8B5CF6" radius={[0, 4, 4, 0]} barSize={20}>
-                      <LabelList dataKey="count" position="right" fill="#64748b" fontSize={11} fontWeight="bold" />
+                      <LabelList dataKey="count" position="right" fill="#64748b" fontSize={11} fontWeight="bold" formatter={formatComma} />
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
@@ -187,9 +191,9 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
                   <BarChart data={stats.noteTypesByAvgInt} layout="vertical" margin={{ left: 10, right: 40 }}>
                     <XAxis type="number" hide />
                     <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748b' }} width={80} />
-                    <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ borderRadius: '8px', border: 'none' }} formatter={(val) => formatNum(val as number)} />
+                    <Tooltip formatter={(value: number) => formatComma(value)} cursor={{ fill: 'transparent' }} contentStyle={{ borderRadius: '8px', border: 'none' }} />
                     <Bar dataKey="avgInt" name="平均互动量" fill="#EC4899" radius={[0, 4, 4, 0]} barSize={20}>
-                      <LabelList dataKey="avgInt" position="right" fill="#64748b" fontSize={11} fontWeight="bold" formatter={formatNum} />
+                      <LabelList dataKey="avgInt" position="right" fill="#64748b" fontSize={11} fontWeight="bold" formatter={formatComma} />
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
@@ -198,7 +202,7 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
           </div>
         )}
 
-        {/* ================= Tab 3: 达人策略 (修复了跳转链接) ================= */}
+        {/* ================= Tab 3: 达人策略 ================= */}
         {activeTab === 'creators' && (
           <div className="space-y-6 animate-fade-in">
             {stats.topCreator && (
@@ -209,7 +213,7 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
                   <p className="text-[11px] text-slate-600 mt-1 truncate max-w-md">爆文: {stats.topCreator.title}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-xl font-black text-indigo-600">{formatNum(stats.topCreator.interactions)}</p>
+                  <p className="text-xl font-black text-indigo-600">{formatComma(stats.topCreator.interactions)}</p>
                   <p className="text-[10px] text-slate-500">斩获互动量</p>
                 </div>
               </div>
@@ -233,7 +237,6 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
                 </div>
               </div>
 
-              {/* 修改：加上了一键跳转个人主页的链接 */}
               {stats.repeatedCreators.length > 0 && (
                 <div className="pt-4">
                   <p className="text-[11px] font-bold text-slate-600 mb-3 flex items-center gap-1.5"><Repeat size={14} className="text-indigo-500" /> 品牌高频复投达人 ({stats.repeatedCreators.length}位)</p>
@@ -292,9 +295,9 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="timeLabel" axisLine={false} tickLine={false} tick={{ fontSize: 11 }} />
                 <YAxis hide />
-                <Tooltip contentStyle={{ borderRadius: '8px', border: 'none' }} />
+                <Tooltip formatter={(value: number) => formatComma(value)} contentStyle={{ borderRadius: '8px', border: 'none' }} />
                 <Line type="monotone" name="达人数" dataKey="creators" stroke="#8B5CF6" strokeWidth={3} dot={{ r: 3 }} activeDot={{ r: 6 }} >
-                  <LabelList dataKey="creators" position="top" fill="#8B5CF6" fontSize={11} fontWeight="bold" />
+                  <LabelList dataKey="creators" position="top" fill="#8B5CF6" fontSize={11} fontWeight="bold" formatter={formatComma} />
                 </Line>
               </LineChart>
             </ChartBox>
@@ -302,7 +305,9 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
             <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
               <h3 className="text-xs font-bold text-slate-700 mb-4 flex items-center gap-1.5"><Crown size={16} className="text-amber-500"/> 达人爆款互动排行 (Top 10)</h3>
               <div className="bg-white rounded-xl border border-slate-100 overflow-hidden">
-                {stats.top10Notes.map((note, i) => (
+                {stats.top10Notes.map((note, i) => {
+                  const xhsUrl = (note as any).xhsUrl;
+                  return (
                   <div key={i} className="flex items-center justify-between p-3 border-b border-slate-50 hover:bg-slate-50 transition-colors">
                     <div className="flex items-center gap-3">
                       <div className={`w-6 h-6 rounded-md flex items-center justify-center text-xs font-black ${i===0?'bg-amber-100 text-amber-600':i===1?'bg-slate-200 text-slate-600':i===2?'bg-orange-100 text-orange-600':'bg-slate-50 text-slate-400'}`}>
@@ -310,7 +315,14 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
-                          <p className="text-[13px] font-bold text-slate-800">{note.influencerName}</p>
+                          {/* 修改：Top10达人名字支持一键跳转个人主页！ */}
+                          {xhsUrl ? (
+                            <a href={xhsUrl} target="_blank" rel="noreferrer" className="text-[13px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 group/link" title="点击访问达人主页">
+                              {note.influencerName} <ExternalLink size={10} className="opacity-0 group-hover/link:opacity-100 transition-opacity" />
+                            </a>
+                          ) : (
+                            <p className="text-[13px] font-bold text-slate-800">{note.influencerName}</p>
+                          )}
                           <span className="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 rounded-sm">{note.noteType}</span>
                         </div>
                         <p className="text-[10px] text-slate-500 mt-0.5">{note.influencerType} · {formatNum(note.followers)}粉</p>
@@ -318,7 +330,7 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
                     </div>
                     <div className="flex items-center gap-4 text-right">
                       <div>
-                        <p className="text-sm font-black text-indigo-600">{formatNum(note.interactions)}</p>
+                        <p className="text-sm font-black text-indigo-600">{formatComma(note.interactions)}</p>
                         <p className="text-[10px] text-slate-400">互动</p>
                       </div>
                       {note.noteLink && note.noteLink !== '未知' ? (
@@ -330,19 +342,19 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
                       )}
                     </div>
                   </div>
-                ))}
+                )})}
               </div>
             </div>
           </div>
         )}
 
-        {/* ================= Tab 4: 费用分析 & 明细 保持不变 ================= */}
+        {/* ================= Tab 4: 费用分析 ================= */}
         {activeTab === 'cost' && (
           <div className="space-y-6 animate-fade-in">
             <div className="flex gap-4">
               <div className="flex-1 bg-white border border-amber-100 shadow-sm rounded-xl p-5 relative">
                 <p className="text-xs text-slate-500 mb-1">总预估投放</p>
-                <p className="text-3xl font-black text-slate-800">¥{formatNum(stats.cost)}</p>
+                <p className="text-3xl font-black text-slate-800">¥{formatComma(stats.cost)}</p>
                 <p className="text-[11px] text-slate-400 mt-2">{stats.notes} 篇笔记</p>
                 <DollarSign className="absolute right-4 top-4 text-amber-100" size={48} />
               </div>
@@ -360,7 +372,8 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
                 <XAxis dataKey="timeLabel" axisLine={false} tickLine={false} tick={{ fontSize: 11 }} />
                 <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#10B981' }} width={40} tickFormatter={(v)=>'¥'+formatNum(v)} />
                 {!stats.isDaily && <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#F59E0B' }} width={30} />}
-                <Tooltip contentStyle={{ borderRadius: '8px', border: 'none' }} />
+                {/* 悬浮框价格加入千位分隔符 */}
+                <Tooltip formatter={(value: number, name: string) => name === '预估费用' ? '¥' + formatComma(value) : value} contentStyle={{ borderRadius: '8px', border: 'none' }} />
                 <Legend iconType="circle" wrapperStyle={{ fontSize: '12px' }} />
                 <Line yAxisId="left" type="monotone" name="预估费用" dataKey="cost" stroke="#10B981" strokeWidth={3} dot={{ r: 3 }} />
                 {!stats.isDaily && <Line yAxisId="right" type="monotone" name="CPE" dataKey="cpe" stroke="#F59E0B" strokeWidth={3} dot={{ r: 3 }} />}
