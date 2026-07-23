@@ -46,95 +46,64 @@ export const AIPanel: React.FC<Props> = ({ data, selectedCommercial, selectedBra
     const tags = Array.from(new Set(records.map(r => r.tags).filter(Boolean).map(t => t.split(',')[0]))).slice(0, 15).join('、');
     const topRecord = records.reduce((p, c) => p.interactions > c.interactions ? p : c);
 
-    // ================= 赛道交叉数据深度计算 =================
-    const trackMap = new Map<string, { count: number; interactions: number; cost: number }>();
+    // ================= 新增：赛道深度分析算力 =================
+    const typeMap = new Map<string, { count: number; interactions: number }>();
     records.forEach(r => {
-      const type = r.noteType || '未知';
-      const current = trackMap.get(type) || { count: 0, interactions: 0, cost: 0 };
-      current.count += 1;
-      current.interactions += r.interactions;
-      current.cost += r.estimatedCost;
-      trackMap.set(type, current);
+      const t = r.noteType || '未知赛道';
+      const d = typeMap.get(t) || { count: 0, interactions: 0 };
+      d.count += 1; d.interactions += r.interactions;
+      typeMap.set(t, d);
     });
-
-    const trackStats = Array.from(trackMap.entries()).map(([name, s]) => ({
-      name,
-      count: s.count,
-      interactions: s.interactions,
-      avgInteractions: Math.round(s.interactions / s.count),
-      cost: s.cost,
-      cpe: s.interactions > 0 ? (s.cost / s.interactions).toFixed(2) : (s.cost > 0 ? s.cost.toFixed(2) : '0.00')
+    const typeStats = Array.from(typeMap.entries()).map(([name, stat]) => ({
+      name, count: stat.count, avgInt: stat.count > 0 ? stat.interactions / stat.count : 0
     }));
+    // 头部赛道
+    const topTypes = [...typeStats].sort((a, b) => b.count * b.avgInt - a.count * a.avgInt).slice(0, 3)
+      .map(t => `${t.name}(${t.count}篇,均互动${Math.round(t.avgInt)})`).join('、');
+    // 潜力赛道挖掘（篇数少但均互动高）
+    const potentialTypes = [...typeStats].filter(t => t.count <= 3 && t.avgInt > 100).sort((a,b) => b.avgInt - a.avgInt).slice(0, 2)
+      .map(t => `${t.name}(均互动${Math.round(t.avgInt)})`).join('、');
 
-    // 排序：篇均效率最高（最值得像素级复刻）
-    const sortedByEfficiency = [...trackStats].sort((a, b) => b.avgInteractions - a.avgInteractions);
-    // 排序：合作规模（铺量度）
-    const sortedByVolume = [...trackStats].sort((a, b) => b.count - a.count);
-    
-    // 计算全局平均互动
-    const globalAvgInteractions = records.length > 0 ? Math.round(interactions / records.length) : 0;
+    // ================= 新增：成本浪费/预算黑洞算力 =================
+    // 找出花费高但互动差的嫌疑笔记 (按单次互动成本CPE降序排)
+    const worstNotes = [...records].filter(r => r.estimatedCost > 0).sort((a, b) => {
+      const cpeA = a.interactions > 0 ? a.estimatedCost / a.interactions : a.estimatedCost;
+      const cpeB = b.interactions > 0 ? b.estimatedCost / b.interactions : b.estimatedCost;
+      return cpeB - cpeA;
+    }).slice(0, 2);
+    const wasteEvidence = worstNotes.length > 0 
+      ? worstNotes.map(n => `[${n.influencerType}赛道]花费¥${n.estimatedCost}但互动仅${n.interactions}`).join('；') 
+      : '无明显极端浪费案例';
 
-    // 筛选：潜在蓝海爆款赛道 (合作篇数 <= 3篇，但篇均效率高于大盘平均值，且CPE合理的赛道)
-    const blueOceanTracks = trackStats.filter(t => t.count <= 3 && t.avgInteractions > globalAvgInteractions);
-    const blueOceanStr = blueOceanTracks.length > 0
-      ? blueOceanTracks.map(t => `【${t.name}】(合作 ${t.count} 篇, 篇均互动 ${t.avgInteractions}, CPE ¥${t.cpe})`).join('、')
-      : '暂无明显蓝海机会赛道';
-
-    // 筛选：高浪费/低ROI赛道 (赛道CPE 明显高于 全局平均CPE 的 1.5 倍)
-    const globalCpeNum = parseFloat(cpe as string);
-    const wastefulTracks = trackStats.filter(t => {
-      const trackCpeNum = parseFloat(t.cpe);
-      return trackCpeNum > (globalCpeNum * 1.5) && t.cost > 0;
-    });
-    const wastefulStr = wastefulTracks.length > 0
-      ? wastefulTracks.map(t => `【${t.name}】(赛道CPE高达 ¥${t.cpe}, 篇均互动仅 ${t.avgInteractions})`).join('、')
-      : '未发现明显高预算浪费赛道';
-
-    // 组装格式化各赛道详细数据表
-    const trackDetailsMarkdown = trackStats.map(t => 
-      `- 【${t.name}】: 合作 ${t.count} 篇 | 赛道总花费 ¥${t.cost} | 总互动量 ${t.interactions} | 篇均互动 ${t.avgInteractions} | 实际CPE ¥${t.cpe}`
-    ).join('\n');
-
+    // 严谨保留原有 6 个模块结构，仅在模块2和3追加要求
     const prompt = `
 筛选视角：【品牌：${selectedBrands.length===0?'全部':selectedBrands.join('、')}】 | 【月份：${selectedMonths.length===0?'全部':selectedMonths.join('、')}】 | 【性质：${selectedCommercial==='全部'?'全部笔记':selectedCommercial==='是'?'仅商业笔记':'非商业'}】
 
-客观核心数据指标（请在报告中引用以下数据）：
+客观数据指标（请在报告中引用以下数据）：
 - 共 ${records.length} 篇笔记，其中视频 ${videoCount} 支，图文 ${imageCount} 篇。
 - 总预估花费 ¥${cost}。
 - 共有 ${uniqueCreators.length} 位达人，其中复投达人 ${repeatedCount} 位。
-- 单粉成本(CPF)约 ¥${cpf}，全局单次互动成本(CPE)约 ¥${cpe}。
-- 大盘整体篇均互动量：${globalAvgInteractions}
+- 单粉成本(CPF)约 ¥${cpf}，单次互动成本(CPE)约 ¥${cpe}。
+- 高频达人标签聚类：${tags}
+- 赛道互动表现参考：主力赛道为 ${topTypes || '无'}。高潜力爆款机会赛道：${potentialTypes || '无'}。
+- 成本浪费嫌疑参考：发现 ${wasteEvidence}。
 
-各赛道（笔记分类）核心计算数据表（请在报告中必须引用以下真实计算结果）：
-${trackDetailsMarkdown}
-
-系统交叉计算得出的推演线索：
-- 篇均效率最高（爆款率最高）的赛道：【${sortedByEfficiency[0]?.name || '无'}】 (篇均互动: ${sortedByEfficiency[0]?.avgInteractions || 0})
-- 合作数量最大（品牌主攻）的赛道：【${sortedByVolume[0]?.name || '无'}】 (合作数: ${sortedByVolume[0]?.count || 0})
-- 测算出【潜在蓝海爆款赛道】：${blueOceanStr}
-- 测算出【可能存在预算浪费/低效赛道】：${wastefulStr}
-
-爆款笔记案例：
+爆款笔记特征分析用：
 - 标题: ${topRecord.title}
 - 达人: ${topRecord.influencerType} (粉丝:${topRecord.followers})
 - 形式: ${topRecord.noteType} / ${topRecord.noteForm}
 - 互动量: ${topRecord.interactions}
 
-请根据以上真实计算数据，输出商业洞察报告，必须包含以下6个模块（请严格使用 ### 作为主标题，- 作为列表）：
+请根据以上真实数据，输出商业洞察报告，必须包含以下6个模块（请严格使用 ### 作为主标题，- 作为列表）：
 
 ### 1. 达人采购策略
 分析粉丝层级、标签聚类、是否偏腰部/复投。判断品牌偏向：ROI效率型/曝光型/矩阵铺量型/垂直型（必须给出证据）。
 
 ### 2. 内容分析
-分析视频图文比例、标题风格（情绪/生活/种草）、场景。判断品牌打法：生活方式/功能教育/节点营销/SEO/爆款冲刺。
-同时，必须在这一章中结合系统计算的赛道数据，进行以下推断：
-- 结合爆款案例的特征、标题和形式，定量分析篇均互动量最高（即最有效率）的赛道是否值得进行像素级复刻？并给出具体复刻方法。
-- 深度挖掘爆款机会蓝海：结合计算出的“潜在蓝海爆款赛道”（合作篇数极少但篇均互动量极高的赛道），论证其为什么能以小博大，以及品牌未来应如何布局抢占。
+分析视频图文比例、标题风格（情绪/生活/种草）、场景。判断品牌打法：生活方式/功能教育/节点营销/SEO/爆款冲刺。请加上关于赛道的分析，结合上述客观提供的赛道互动表现数据，去推断当前头部赛道笔记是否值得复刻；同时除了爆款复刻，还要根据高潜力爆款赛道数据，挖掘出可能有爆款机会的其他赛道，这些都要根据计算的结果来推断。
 
 ### 3. 预算与ROI结构
-分析CPF、CPE等。品牌是否在控制成本？是否存在浪费？
-同时，必须在这一章中结合费用分析与互动效果，进行成本浪费的精准判断：
-- 针对系统计算出的“低ROI/可能浪费的赛道”（即赛道CPE明显偏高，且篇均互动过低的赛道），深度判断其是否属于预算浪费盲区，并给出优化建议或砍掉预算的具体论证。
+分析CPF、CPE等。品牌是否在控制成本？是否存在浪费？成本浪费判断需要严格根据客观提供的费用分析（成本浪费嫌疑参考数据）还有整体互动效果来判断是否真的存在浪费。
 
 ### 4. 内容效果结构
 分析高互动内容并解释原因。
@@ -145,12 +114,7 @@ ${trackDetailsMarkdown}
 ### 6. 机会与行动建议
 具体可执行建议：优先合作哪类达人？复投建议？内容形式建议？`;
 
-    // 1. 先插入用户的问题
-    const userMsg: ChatMessage = { role: 'user', content: `基于当前所有筛选条件，生成深度商业分析报告。`, timestamp: new Date() };
-    // 2. 紧接着插入一条空的 AI 占位消息，准备承接流式输入
-    const assistantMsg: ChatMessage = { role: 'assistant', content: '', timestamp: new Date() };
-    
-    setMessages([userMsg, assistantMsg]);
+    setMessages([{ role: 'user', content: `基于当前所有筛选条件，生成深度商业分析报告。`, timestamp: new Date() }]);
     setIsTyping(true);
 
     try {
@@ -159,72 +123,14 @@ ${trackDetailsMarkdown}
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt })
       });
+      const resData = await res.json();
+      if (!res.ok) throw new Error(resData.error || '请求失败');
 
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || '分析请求失败');
-      }
-
-      const reader = res.body?.getReader();
-      const decoder = new TextDecoder('utf-8');
-      if (!reader) throw new Error('流式读取通道打开失败');
-
-      setIsTyping(false);
-
-      let done = false;
-      let currentText = '';
-      let buffer = '';
-
-      while (!done) {
-        const { value, done: readerDone } = await reader.read();
-        done = readerDone;
-        if (value) {
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || '';
-
-          for (const line of lines) {
-            const cleanedLine = line.trim();
-            if (!cleanedLine) continue;
-            if (cleanedLine === 'data: [DONE]') {
-              done = true;
-              break;
-            }
-            if (cleanedLine.startsWith('data: ')) {
-              try {
-                const json = JSON.parse(cleanedLine.slice(6));
-                const content = json.choices?.[0]?.delta?.content || '';
-                currentText += content;
-
-                setMessages(prev => {
-                  const updated = [...prev];
-                  if (updated.length > 0) {
-                    updated[updated.length - 1] = {
-                      ...updated[updated.length - 1],
-                      content: currentText,
-                    };
-                  }
-                  return updated;
-                });
-              } catch (e) {
-                // 忽略偶发的单行 JSON 解析异常
-              }
-            }
-          }
-        }
-      }
+      setMessages(prev => [...prev, { role: 'assistant', content: resData.result, timestamp: new Date() }]);
     } catch (error: any) {
+      setMessages(prev => [...prev, { role: 'assistant', content: `❌ 分析失败: ${error.message}`, timestamp: new Date() }]);
+    } finally {
       setIsTyping(false);
-      setMessages(prev => {
-        const updated = [...prev];
-        if (updated.length > 0) {
-          updated[updated.length - 1] = {
-            ...updated[updated.length - 1],
-            content: `❌ 分析失败: ${error.message}`,
-          };
-        }
-        return updated;
-      });
     }
   };
 
@@ -289,19 +195,16 @@ ${trackDetailsMarkdown}
           </div>
         )}
 
-        {messages.map((msg, i) => {
-          if (msg.role === 'assistant' && msg.content === '' && isTyping) return null;
-          return (
-            <div key={i} className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-              <div className={`max-w-[95%] rounded-xl px-4 py-3 shadow-sm ${
-                  msg.role === 'user' ? 'bg-gradient-to-br from-indigo-500 to-violet-600 text-white text-[13px]' : 'bg-slate-50 border border-slate-100'
-                }`}
-              >
-                {msg.role === 'assistant' ? renderMessage(msg.content) : msg.content}
-              </div>
+        {messages.map((msg, i) => (
+          <div key={i} className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+            <div className={`max-w-[95%] rounded-xl px-4 py-3 shadow-sm ${
+                msg.role === 'user' ? 'bg-gradient-to-br from-indigo-500 to-violet-600 text-white text-[13px]' : 'bg-slate-50 border border-slate-100'
+              }`}
+            >
+              {msg.role === 'assistant' ? renderMessage(msg.content) : msg.content}
             </div>
-          );
-        })}
+          </div>
+        ))}
 
         {isTyping && (
           <div className="flex gap-2">
@@ -309,7 +212,7 @@ ${trackDetailsMarkdown}
               <div className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce" />
               <div className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '150ms' }} />
               <div className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '300ms' }} />
-              <span className="text-[11px] text-slate-400 ml-2">脑暴中，准备开始输出报告...</span>
+              <span className="text-[11px] text-slate-400 ml-2">模型推理中，深度赛道评估进行中...</span>
             </div>
           </div>
         )}
