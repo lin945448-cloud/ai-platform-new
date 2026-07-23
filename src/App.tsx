@@ -74,7 +74,7 @@ export default function App() {
             <Activity size={18} className="text-white" />
           </div>
           <div>
-            <h1 className="text-[15px] font-black text-slate-800 tracking-wide">竞品达人战略洞察平台</h1>
+            <h1 className="text-[15px] font-black text-slate-800 tracking-wide">小红书达人数据洞察平台</h1>
             <p className="text-[10px] font-bold text-slate-400 uppercase">Competitor Intelligence · AI-Powered</p>
           </div>
         </div>
@@ -87,8 +87,8 @@ export default function App() {
               {/* 性质依然单选（最合理） */}
               <select value={selectedCommercial} onChange={(e) => setSelectedCommercial(e.target.value)} className="bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold text-slate-700 outline-none cursor-pointer hover:border-indigo-300">
                 <option value="全部">全部笔记性质</option>
-                <option value="是">仅商业笔记 (是)</option>
-                <option value="否">仅非商业笔记 (否)</option>
+                <option value="是">仅商业笔记</option>
+                <option value="否">仅非商业笔记</option>
               </select>
               
               {/* 品牌和月份变成高级多选！ */}
