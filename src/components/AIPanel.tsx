@@ -46,7 +46,7 @@ export const AIPanel: React.FC<Props> = ({ data, selectedCommercial, selectedBra
     const tags = Array.from(new Set(records.map(r => r.tags).filter(Boolean).map(t => t.split(',')[0]))).slice(0, 15).join('、');
     const topRecord = records.reduce((p, c) => p.interactions > c.interactions ? p : c);
 
-    // ================= 新增：赛道深度分析算力 =================
+    // ================= 新增：赛道深度分析算力（抓取真实标题） =================
     const typeMap = new Map<string, { count: number; interactions: number }>();
     records.forEach(r => {
       const t = r.noteType || '未知赛道';
@@ -57,15 +57,29 @@ export const AIPanel: React.FC<Props> = ({ data, selectedCommercial, selectedBra
     const typeStats = Array.from(typeMap.entries()).map(([name, stat]) => ({
       name, count: stat.count, avgInt: stat.count > 0 ? stat.interactions / stat.count : 0
     }));
-    // 头部赛道
-    const topTypes = [...typeStats].sort((a, b) => b.count * b.avgInt - a.count * a.avgInt).slice(0, 3)
-      .map(t => `${t.name}(${t.count}篇,均互动${Math.round(t.avgInt)})`).join('、');
-    // 潜力赛道挖掘（篇数少但均互动高）
-    const potentialTypes = [...typeStats].filter(t => t.count <= 3 && t.avgInt > 100).sort((a,b) => b.avgInt - a.avgInt).slice(0, 2)
-      .map(t => `${t.name}(均互动${Math.round(t.avgInt)})`).join('、');
 
-    // ================= 新增：成本浪费/预算黑洞算力 =================
-    // 找出花费高但互动差的嫌疑笔记 (按单次互动成本CPE降序排)
+    // 获取特定赛道下互动最高的笔记，提供给 AI 做真实数据支撑
+    const getTopNoteForType = (typeName: string) => {
+      const notes = records.filter(r => (r.noteType || '未知赛道') === typeName);
+      if (notes.length === 0) return null;
+      return notes.reduce((p, c) => p.interactions > c.interactions ? p : c);
+    };
+
+    // 1. 最高效赛道 (篇均互动最高)
+    const efficientTypes = [...typeStats].sort((a, b) => b.avgInt - a.avgInt).slice(0, 2)
+      .map(t => {
+        const topNote = getTopNoteForType(t.name);
+        return `【${t.name}赛道】(共${t.count}篇, 均互动${Math.round(t.avgInt)}。代表真实爆文标题：《${topNote?.title}》)`;
+      }).join('； ');
+
+    // 2. 潜在蓝海爆款赛道 (篇数<=3，但均互动高)
+    const potentialTypes = [...typeStats].filter(t => t.count <= 3 && t.avgInt > 100).sort((a,b) => b.avgInt - a.avgInt).slice(0, 2)
+      .map(t => {
+        const topNote = getTopNoteForType(t.name);
+        return `【${t.name}赛道】(仅${t.count}篇, 但均互动高达${Math.round(t.avgInt)}。代表真实潜力笔记标题：《${topNote?.title}》)`;
+      }).join('； ');
+
+    // ================= 成本浪费/预算黑洞算力 =================
     const worstNotes = [...records].filter(r => r.estimatedCost > 0).sort((a, b) => {
       const cpeA = a.interactions > 0 ? a.estimatedCost / a.interactions : a.estimatedCost;
       const cpeB = b.interactions > 0 ? b.estimatedCost / b.interactions : b.estimatedCost;
@@ -75,20 +89,19 @@ export const AIPanel: React.FC<Props> = ({ data, selectedCommercial, selectedBra
       ? worstNotes.map(n => `[${n.influencerType}赛道]花费¥${n.estimatedCost}但互动仅${n.interactions}`).join('；') 
       : '无明显极端浪费案例';
 
-    // 严谨保留原有 6 个模块结构，仅在模块2和3追加要求
     const prompt = `
 筛选视角：【品牌：${selectedBrands.length===0?'全部':selectedBrands.join('、')}】 | 【月份：${selectedMonths.length===0?'全部':selectedMonths.join('、')}】 | 【性质：${selectedCommercial==='全部'?'全部笔记':selectedCommercial==='是'?'仅商业笔记':'非商业'}】
 
 客观数据指标（请在报告中引用以下数据）：
 - 共 ${records.length} 篇笔记，其中视频 ${videoCount} 支，图文 ${imageCount} 篇。
-- 总预估花费 ¥${cost}。
-- 共有 ${uniqueCreators.length} 位达人，其中复投达人 ${repeatedCount} 位。
+- 总预估花费 ¥${cost}。共有 ${uniqueCreators.length} 位达人，其中复投达人 ${repeatedCount} 位。
 - 单粉成本(CPF)约 ¥${cpf}，单次互动成本(CPE)约 ¥${cpe}。
 - 高频达人标签聚类：${tags}
-- 赛道互动表现参考：主力赛道为 ${topTypes || '无'}。高潜力爆款机会赛道：${potentialTypes || '无'}。
+- 篇均最高效赛道数据支撑：${efficientTypes || '无'}。
+- 潜在蓝海赛道数据支撑(合作篇数少但均互动高)：${potentialTypes || '无'}。
 - 成本浪费嫌疑参考：发现 ${wasteEvidence}。
 
-爆款笔记特征分析用：
+全盘最强爆款笔记特征：
 - 标题: ${topRecord.title}
 - 达人: ${topRecord.influencerType} (粉丝:${topRecord.followers})
 - 形式: ${topRecord.noteType} / ${topRecord.noteForm}
@@ -100,7 +113,9 @@ export const AIPanel: React.FC<Props> = ({ data, selectedCommercial, selectedBra
 分析粉丝层级、标签聚类、是否偏腰部/复投。判断品牌偏向：ROI效率型/曝光型/矩阵铺量型/垂直型（必须给出证据）。
 
 ### 2. 内容分析
-分析视频图文比例、标题风格（情绪/生活/种草）、场景。判断品牌打法：生活方式/功能教育/节点营销/SEO/爆款冲刺。请加上关于赛道的分析，结合上述客观提供的赛道互动表现数据，去推断当前头部赛道笔记是否值得复刻；同时除了爆款复刻，还要根据高潜力爆款赛道数据，挖掘出可能有爆款机会的其他赛道，这些都要根据计算的结果来推断。
+分析视频图文比例、标题风格（情绪/生活/种草）、场景。判断品牌打法：生活方式/功能教育/节点营销/SEO/爆款冲刺。
+- 结合爆款案例的特征、标题和形式，定量分析篇均互动量最高（即最有效率）的赛道是否值得进行像素级复刻？并给出具体复刻方法。
+- 深度挖掘爆款机会蓝海：同时除了爆款复刻，还要根据高潜力爆款赛道数据，挖掘出可能有爆款机会的其他赛道，这些都要根据计算的结果来推断。结合计算出的“潜在蓝海爆款赛道”（合作篇数极少但篇均互动量极高的赛道），论证其为什么能以小博大，以及品牌未来应如何布局抢占。需要输出该蓝海赛道的内容例子标题，一切都要基于左边分析的数据得出，要有实际的数据支撑加推断。
 
 ### 3. 预算与ROI结构
 分析CPF、CPE等。品牌是否在控制成本？是否存在浪费？成本浪费判断需要严格根据客观提供的费用分析（成本浪费嫌疑参考数据）还有整体互动效果来判断是否真的存在浪费。
