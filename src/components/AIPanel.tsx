@@ -46,7 +46,7 @@ export const AIPanel: React.FC<Props> = ({ data, selectedCommercial, selectedBra
     const tags = Array.from(new Set(records.map(r => r.tags).filter(Boolean).map(t => t.split(',')[0]))).slice(0, 15).join('、');
     const topRecord = records.reduce((p, c) => p.interactions > c.interactions ? p : c);
 
-    // ================= 前端赛道高阶算力 =================
+    // ================= 赛道深度分析算力（抓取真实标题） =================
     const typeMap = new Map<string, { count: number; interactions: number }>();
     records.forEach(r => {
       const t = r.noteType || '未知赛道';
@@ -58,30 +58,37 @@ export const AIPanel: React.FC<Props> = ({ data, selectedCommercial, selectedBra
       name, count: stat.count, avgInt: stat.count > 0 ? stat.interactions / stat.count : 0
     }));
 
-    // 1. 效率冠军赛道 (篇均互动最高的赛道)
-    const efficiencyChampion = typeStats.length > 0 
-      ? [...typeStats].sort((a, b) => b.avgInt - a.avgInt)[0] 
-      : null;
-    const effChampionStr = efficiencyChampion 
-      ? `${efficiencyChampion.name}(共合作${efficiencyChampion.count}篇，篇均互动量高达${Math.round(efficiencyChampion.avgInt)})` 
-      : '无';
+    // 获取特定赛道下互动最高的笔记，提供给 AI 做真实数据支撑
+    const getTopNoteForType = (typeName: string) => {
+      const notes = records.filter(r => (r.noteType || '未知赛道') === typeName);
+      if (notes.length === 0) return null;
+      return notes.reduce((p, c) => p.interactions > c.interactions ? p : c);
+    };
 
-    // 2. 潜在蓝海爆款机会赛道 (合作篇数极少 <=2篇，但篇均互动极高的长尾赛道)
-    const potentialTypes = typeStats.length > 0 
-      ? [...typeStats].filter(t => t.count <= 2 && t.avgInt > 100).sort((a,b) => b.avgInt - a.avgInt).slice(0, 2)
-          .map(t => `${t.name}(合作${t.count}篇，篇均互动量${Math.round(t.avgInt)})`).join('、')
-      : '无';
+    // 1. 最高效赛道 (篇均互动最高)
+    const sortedByEfficiency = [...typeStats].sort((a, b) => b.avgInt - a.avgInt);
+    const efficiencyChampion = sortedByEfficiency.length > 0 ? sortedByEfficiency[0] : null;
 
-    // ================= 成本浪费算力 =================
+    // 2. 潜在蓝海爆款赛道 (篇数<=3，但均互动高)
+    const potentialTypes = [...typeStats].filter(t => t.count <= 3 && t.avgInt > 100).sort((a,b) => b.avgInt - a.avgInt).slice(0, 2)
+      .map(t => {
+        const topNote = getTopNoteForType(t.name);
+        return `【${t.name}赛道】(仅${t.count}篇, 但均互动高达${Math.round(t.avgInt)}。代表蓝海笔记标题：《${topNote?.title}》)`;
+      }).join('； ');
+
+    // ================= 修改点：成本浪费/预算黑洞算力（精准揪出赛道和标题） =================
     const worstNotes = [...records].filter(r => r.estimatedCost > 0).sort((a, b) => {
       const cpeA = a.interactions > 0 ? a.estimatedCost / a.interactions : a.estimatedCost;
       const cpeB = b.interactions > 0 ? b.estimatedCost / b.interactions : b.estimatedCost;
       return cpeB - cpeA;
     }).slice(0, 2);
+    
+    // 修改：将 influencerType 换成了真正的赛道 noteType，并拼接了具体的翻车笔记标题
     const wasteEvidence = worstNotes.length > 0 
-      ? worstNotes.map(n => `[${n.influencerType}赛道]花费¥${n.estimatedCost}但互动仅${n.interactions}`).join('；') 
+      ? worstNotes.map(n => `【${n.noteType || '未知'}赛道】花费¥${n.estimatedCost}但互动仅${n.interactions}（避坑案例标题：《${n.title}》）`).join(' ； ') 
       : '无明显极端浪费案例';
 
+    // 严密对接你修改后的新版 Prompt
     const prompt = `
 筛选视角：【品牌：${selectedBrands.length===0?'全部':selectedBrands.join('、')}】 | 【月份：${selectedMonths.length===0?'全部':selectedMonths.join('、')}】 | 【性质：${selectedCommercial==='全部'?'全部笔记':selectedCommercial==='是'?'仅商业笔记':'非商业'}】
 
@@ -91,15 +98,12 @@ export const AIPanel: React.FC<Props> = ({ data, selectedCommercial, selectedBra
 - 共有 ${uniqueCreators.length} 位达人，其中复投达人 ${repeatedCount} 位。
 - 单粉成本(CPF)约 ¥${cpf}，单次互动成本(CPE)约 ¥${cpe}。
 - 高频达人标签聚类：${tags}
-- 前端计算算力输出数据（必须严格作为推理支撑）：
-  * 效率冠军赛道（篇均互动最高）：${effChampionStr}。
-  * 潜在蓝海爆款机会赛道（篇数极少但高互动）：${potentialTypes}。
-  * 成本浪费嫌疑参考：发现 ${wasteEvidence}。
+- 成本浪费嫌疑参考：发现 ${wasteEvidence}。
 
-爆款笔记特征分析用：
+全盘最强爆款笔记特征：
 - 标题: ${topRecord.title}
-- 达人: ${topRecord.influencerType} (粉丝:${topRecord.followers})
-- 形式: ${topRecord.noteType} / ${topRecord.noteForm}
+- 达人属性: ${topRecord.influencerType} (粉丝:${topRecord.followers})
+- 赛道形式: ${topRecord.noteType} / ${topRecord.noteForm}
 - 互动量: ${topRecord.interactions}
 
 请根据以上真实数据，输出商业洞察报告，必须包含以下6个模块（请严格使用 ### 作为主标题，- 作为列表）：
@@ -114,7 +118,7 @@ export const AIPanel: React.FC<Props> = ({ data, selectedCommercial, selectedBra
 - 深度挖掘爆款机会蓝海：结合计算出的“潜在蓝海爆款赛道” [${potentialTypes}] 数据，论证其为什么能以小博大（从用户心智、竞争饱和度等角度），以及品牌未来应如何布局抢占。并且，你必须基于左边分析的数据与推断，为该蓝海赛道量身定制输出 2-3 个极具爆款潜质的内容例子标题。
 
 ### 3. 预算与ROI结构
-分析CPF、CPE等。品牌是否在控制成本？是否存在浪费？成本浪费判断需要严格根据客观提供的费用分析（成本浪费嫌疑参考数据）还有整体互动效果来判断是否真的存在浪费。
+分析CPF、CPE等。品牌是否在控制成本？是否存在浪费？成本浪费判断需要严格根据客观提供的费用分析（成本浪费嫌疑参考数据）还有整体互动效果来判断是否真的存在浪费。**重点要求：必须明确点出表现最差的具体“赛道”，并引用其“避坑案例标题”作为证据，具体分析其ROI为何如此拉胯，给品牌后续投放敲响警钟。**
 
 ### 4. 内容效果结构
 分析高互动内容并解释原因。
@@ -125,7 +129,7 @@ export const AIPanel: React.FC<Props> = ({ data, selectedCommercial, selectedBra
 ### 6. 机会与行动建议
 具体可执行建议：优先合作哪类达人？复投建议？内容形式建议？`;
 
-    setMessages([{ role: 'user', content: `基于当前所有筛选条件，生成深度商业分析报告。`, timestamp: new Date() }]);
+    setMessages([{ role: 'user', content: `基于精准赛道表现与ROI拉胯避坑数据，生成深度商业分析报告。`, timestamp: new Date() }]);
     setIsTyping(true);
 
     try {
@@ -223,7 +227,7 @@ export const AIPanel: React.FC<Props> = ({ data, selectedCommercial, selectedBra
               <div className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce" />
               <div className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '150ms' }} />
               <div className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '300ms' }} />
-              <span className="text-[11px] text-slate-400 ml-2">模型推理中，深度赛道评估进行中...</span>
+              <span className="text-[11px] text-slate-400 ml-2">模型推理中，精细化赛道与成本诊断中...</span>
             </div>
           </div>
         )}
