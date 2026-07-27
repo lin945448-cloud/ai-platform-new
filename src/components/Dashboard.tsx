@@ -6,7 +6,6 @@ import { NotesTable } from './NotesTable';
 
 interface Props { data: ParsedData; selectedCommercial: string; selectedBrands: string[]; selectedMonths: string[]; analysisMode: 'single' | 'compare'; }
 
-// 修复白屏Bug：极强容错的数字格式化函数，防止 undefined/NaN 导致系统崩溃
 const formatNum = (n: any) => { const num = Number(n) || 0; return num >= 10000 ? (num / 10000).toFixed(1) + 'w' : num.toLocaleString(); };
 const formatComma = (n: any) => (Number(n) || 0).toLocaleString();
 const getTop3 = (arr: any[], key: string) => [...arr].sort((a, b) => (Number(b[key])||0) - (Number(a[key])||0)).slice(0, 3);
@@ -36,8 +35,10 @@ function computeStats(records: NoteRecord[], timeUnit: string) {
     }
 
     const nType = r.noteType || '未知';
-    const ext = typeMap.get(nType) || { name: nType, count: 0, interactions: 0, vCount: 0, iCount: 0 };
-    ext.count++; ext.interactions += r.interactions; r.noteForm.includes('视频') ? ext.vCount++ : ext.iCount++;
+    // 新增：计算每个赛道的点赞、评论、收藏
+    const ext = typeMap.get(nType) || { name: nType, count: 0, interactions: 0, likes: 0, comments: 0, collects: 0, vCount: 0, iCount: 0 };
+    ext.count++; ext.interactions += r.interactions; ext.likes += r.likes; ext.comments += r.comments; ext.collects += r.collects;
+    r.noteForm.includes('视频') ? ext.vCount++ : ext.iCount++;
     typeMap.set(nType, ext);
 
     const attr = r.influencerType || '未知属性';
@@ -72,7 +73,7 @@ function computeStats(records: NoteRecord[], timeUnit: string) {
     comments: trends.length ? Math.round(trends.reduce((s,t)=>s+t.comments,0)/trends.length) : 0,
     collects: trends.length ? Math.round(trends.reduce((s,t)=>s+t.collects,0)/trends.length) : 0,
     cpe: trends.length ? (trends.reduce((s,t)=>s+t.cpe,0)/trends.length) : 0,
-    cost: trends.length ? (trends.reduce((s,t)=>s+t.cost,0)/trends.length) : 0, // 新增平均费用计算
+    cost: trends.length ? (trends.reduce((s,t)=>s+t.cost,0)/trends.length) : 0,
   };
 
   return { 
@@ -147,10 +148,11 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
     </div>
   );
 
-  const CompareMetricChart = ({ title, metricSuffix, isRate }: any) => (
-    <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 mt-4">
+  // 修改：竞品对比的单图组件（支持在内部调用时不显示外边框）
+  const CompareMetricChart = ({ title, metricSuffix, isRate, isInner }: any) => (
+    <div className={isInner ? "" : "bg-slate-50 rounded-xl p-4 border border-slate-100 mt-4"}>
       <h3 className="text-xs font-bold text-slate-700 mb-3">{title}推移</h3>
-      <div className="h-56">
+      <div className="h-48">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={compareTrends}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
@@ -167,22 +169,20 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
     </div>
   );
 
-  // 需求修改：排行榜改为一行一个，内部横向排开前3名
+  // 恢复：原版的直观竖向排行榜
   const Top3Ranking = ({ title, records, dataKey, icon, label }: any) => (
-    <div className="bg-white border border-slate-100 rounded-xl p-3 shadow-sm mb-4">
+    <div className="flex-1 min-w-[250px] bg-white border border-slate-100 rounded-xl p-3 shadow-sm">
       <h4 className="text-xs font-bold text-slate-700 mb-3 flex items-center gap-1.5 pb-2 border-b border-slate-50">{icon} {title} TOP3</h4>
-      <div className="grid grid-cols-3 gap-3">
+      <div className="space-y-2">
         {records.map((r:any, i:number) => (
           <div key={i} className="flex gap-2 items-start p-2 rounded-lg bg-slate-50/50 hover:bg-slate-100 transition-colors border border-slate-100">
             <div className={`w-5 h-5 rounded flex-shrink-0 flex items-center justify-center text-[10px] font-black mt-0.5 ${i===0?'bg-amber-100 text-amber-600':i===1?'bg-slate-200 text-slate-600':i===2?'bg-orange-100 text-orange-600':'bg-slate-50 text-slate-400'}`}>{i+1}</div>
             <div className="flex-1 min-w-0">
-              <a href={r.noteLink && r.noteLink!=='未知'?r.noteLink:'#'} target="_blank" rel="noreferrer" className="text-[11px] font-bold text-indigo-600 hover:underline line-clamp-2 leading-snug">{r.title} <ExternalLink size={8} className="inline"/></a>
-              <div className="flex flex-col gap-0.5 mt-1 text-[10px] text-slate-500">
-                <span className="w-fit bg-white border border-slate-200 px-1 rounded shadow-sm">{r.noteType}</span>
-                <span className="truncate">
-                  <a href={r.xhsUrl||'#'} target="_blank" rel="noreferrer" className="hover:text-indigo-500 font-bold">{r.influencerName}</a>
-                  <span className="mx-1">·</span>{r.influencerType} ({formatNum(r.followers)}粉)
-                </span>
+              <a href={r.noteLink && r.noteLink!=='未知'?r.noteLink:'#'} target="_blank" rel="noreferrer" className="text-[11px] font-bold text-indigo-600 hover:underline line-clamp-1">{r.title} <ExternalLink size={8} className="inline"/></a>
+              <div className="flex items-center gap-1.5 mt-1 text-[10px] text-slate-500">
+                <span className="bg-white border border-slate-200 px-1 rounded shadow-sm">{r.noteType}</span>
+                <a href={r.xhsUrl||'#'} target="_blank" rel="noreferrer" className="hover:text-indigo-500 font-bold truncate max-w-[80px]">{r.influencerName}</a>
+                <span className="text-slate-300">|</span> <span>{r.influencerType} ({formatNum(r.followers)})</span>
               </div>
             </div>
             <div className="text-right flex-shrink-0 ml-1"><p className="text-xs font-black text-slate-800">{formatComma(r[dataKey])}</p><p className="text-[9px] text-slate-400">{label}</p></div>
@@ -197,7 +197,7 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
     const sortedTypes = useMemo(() => {
       return [...stats.types].sort((a, b) => sort.dir === 'asc' ? a[sort.key] - b[sort.key] : b[sort.key] - a[sort.key]);
     }, [stats.types, sort]);
-    const thClass = "p-3 font-bold cursor-pointer hover:bg-slate-100 transition-colors select-none";
+    const thClass = "p-2 font-bold cursor-pointer hover:bg-slate-100 transition-colors select-none whitespace-nowrap";
     const handleSort = (k:string) => setSort({ key: k, dir: sort.key===k && sort.dir==='desc' ? 'asc' : 'desc' });
 
     return (
@@ -225,31 +225,35 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
           </div>
         </div>
 
-        {/* 需求2：四大排行榜挪到赛道表格上方，且一行一个独立模块 */}
-        <div className="flex flex-col">
-          <Top3Ranking title="互动量最高" records={stats.topInt} dataKey="interactions" icon={<Zap size={14} className="text-indigo-500"/>} label="互动" />
-          <Top3Ranking title="点赞量最高" records={stats.topLikes} dataKey="likes" icon={<ThumbsUp size={14} className="text-rose-500"/>} label="点赞" />
-          <Top3Ranking title="评论量最高" records={stats.topComments} dataKey="comments" icon={<MessageCircle size={14} className="text-violet-500"/>} label="评论" />
-          <Top3Ranking title="收藏量最高" records={stats.topCollects} dataKey="collects" icon={<Star size={14} className="text-amber-500"/>} label="收藏" />
+        {/* 四大排行榜，恢复原版设计，采用 Grid 2x2 布局放在赛道上方 */}
+        <div className="grid grid-cols-2 gap-4">
+          <Top3Ranking title="互动最高" records={stats.topInt} dataKey="interactions" icon={<Zap size={14} className="text-indigo-500"/>} label="互动" />
+          <Top3Ranking title="点赞最高" records={stats.topLikes} dataKey="likes" icon={<ThumbsUp size={14} className="text-rose-500"/>} label="点赞" />
+          <Top3Ranking title="评论最高" records={stats.topComments} dataKey="comments" icon={<MessageCircle size={14} className="text-violet-500"/>} label="评论" />
+          <Top3Ranking title="收藏最高" records={stats.topCollects} dataKey="collects" icon={<Star size={14} className="text-amber-500"/>} label="收藏" />
         </div>
 
-        {/* 排序表格 */}
+        {/* 排序表格，新增点赞/评论/收藏排序列 */}
         <h4 className="text-xs font-bold text-slate-700 flex items-center gap-1.5 pt-2"><LayoutDashboard size={14} className="text-indigo-500"/> 赛道明细数据穿透</h4>
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-          <table className="w-full text-left">
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-x-auto">
+          <table className="w-full text-left min-w-[700px]">
             <thead className="bg-slate-50 border-b border-slate-100"><tr className="text-[11px] text-slate-500">
-              <th className="p-3">赛道名称</th>
+              <th className="p-3 font-bold">赛道名称</th>
               <th className={thClass} onClick={()=>handleSort('count')}><div className="flex items-center gap-1 hover:text-indigo-600">篇数 <ArrowUpDown size={10}/></div></th>
               <th className={thClass} onClick={()=>handleSort('interactions')}><div className="flex items-center gap-1 hover:text-indigo-600">总互动量 <ArrowUpDown size={10}/></div></th>
               <th className={`${thClass} text-indigo-600`} onClick={()=>handleSort('avgInt')}><div className="flex items-center gap-1">篇均互动量 <ArrowUpDown size={10}/></div></th>
-              <th className="p-3">视频占比</th><th className="p-3">图文占比</th>
+              <th className={thClass} onClick={()=>handleSort('likes')}><div className="flex items-center gap-1 hover:text-indigo-600">点赞 <ArrowUpDown size={10}/></div></th>
+              <th className={thClass} onClick={()=>handleSort('comments')}><div className="flex items-center gap-1 hover:text-indigo-600">评论 <ArrowUpDown size={10}/></div></th>
+              <th className={thClass} onClick={()=>handleSort('collects')}><div className="flex items-center gap-1 hover:text-indigo-600">收藏 <ArrowUpDown size={10}/></div></th>
+              <th className="p-2 font-bold">视频占比</th><th className="p-2 font-bold">图文占比</th>
             </tr></thead>
             <tbody className="divide-y divide-slate-50">
               {sortedTypes.map((t:any, i:number) => (
                 <tr key={i} className="hover:bg-slate-50 text-[11px] font-medium text-slate-700">
                   <td className="p-3">{t.name}</td><td className="p-3">{t.count}</td><td className="p-3">{formatComma(t.interactions)}</td><td className="p-3 text-indigo-600 font-bold">{formatComma(Math.round(t.avgInt))}</td>
-                  <td className="p-3"><div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-indigo-400" style={{width:`${t.vPct}%`}}/></div> {t.vPct.toFixed(0)}%</td>
-                  <td className="p-3"><div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-emerald-400" style={{width:`${t.iPct}%`}}/></div> {t.iPct.toFixed(0)}%</td>
+                  <td className="p-3">{formatComma(t.likes)}</td><td className="p-3">{formatComma(t.comments)}</td><td className="p-3">{formatComma(t.collects)}</td>
+                  <td className="p-2"><div className="w-12 h-1.5 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-indigo-400" style={{width:`${t.vPct}%`}}/></div> {t.vPct.toFixed(0)}%</td>
+                  <td className="p-2"><div className="w-12 h-1.5 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-emerald-400" style={{width:`${t.iPct}%`}}/></div> {t.iPct.toFixed(0)}%</td>
                 </tr>
               ))}
             </tbody>
@@ -298,12 +302,31 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
               <>
                 <CompareMetricChart title="篇数" metricSuffix="notes" isRate={false} />
                 <CompareMetricChart title="互动量" metricSuffix="int" isRate={false} />
-                <CompareMetricChart title="点赞量" metricSuffix="likes" isRate={false} />
-                <CompareMetricChart title="点赞互动占比" metricSuffix="likeRate" isRate={true} />
-                <CompareMetricChart title="评论量" metricSuffix="comments" isRate={false} />
-                <CompareMetricChart title="评论互动占比" metricSuffix="commentRate" isRate={true} />
-                <CompareMetricChart title="收藏量" metricSuffix="collects" isRate={false} />
-                <CompareMetricChart title="收藏互动占比" metricSuffix="collectRate" isRate={true} />
+                
+                {/* 需求1: 竞对模式下，量与比例合并在一个大框里 */}
+                <div className="bg-white border border-rose-100 rounded-xl p-4 mt-6 shadow-sm">
+                  <h3 className="text-sm font-black text-slate-800 mb-2 border-l-4 border-rose-500 pl-2">点赞综合表现</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <CompareMetricChart title="点赞量" metricSuffix="likes" isRate={false} isInner={true} />
+                    <CompareMetricChart title="点赞互动占比" metricSuffix="likeRate" isRate={true} isInner={true} />
+                  </div>
+                </div>
+
+                <div className="bg-white border border-violet-100 rounded-xl p-4 mt-6 shadow-sm">
+                  <h3 className="text-sm font-black text-slate-800 mb-2 border-l-4 border-violet-500 pl-2">评论综合表现</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <CompareMetricChart title="评论量" metricSuffix="comments" isRate={false} isInner={true} />
+                    <CompareMetricChart title="评论互动占比" metricSuffix="commentRate" isRate={true} isInner={true} />
+                  </div>
+                </div>
+
+                <div className="bg-white border border-amber-100 rounded-xl p-4 mt-6 shadow-sm">
+                  <h3 className="text-sm font-black text-slate-800 mb-2 border-l-4 border-amber-500 pl-2">收藏综合表现</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <CompareMetricChart title="收藏量" metricSuffix="collects" isRate={false} isInner={true} />
+                    <CompareMetricChart title="收藏互动占比" metricSuffix="collectRate" isRate={true} isInner={true} />
+                  </div>
+                </div>
               </>
             )}
           </div>
@@ -373,7 +396,7 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
                               <td className="p-3">
                                 <ul className="space-y-1.5">
                                   {c.notes.map((n:any, idx:number)=>(
-                                    <li key={idx}><a href={n.noteLink!=='未知'?n.noteLink:'#'} target="_blank" rel="noreferrer" className="text-indigo-600 hover:underline flex items-start gap-1 leading-relaxed"><ExternalLink size={10} className="mt-1 flex-shrink-0"/> {n.title}</a></li>
+                                    <li key={idx}><a href={n.noteLink!=='未知'?n.noteLink:'#'} target="_blank" rel="noreferrer" className="text-indigo-600 hover:underline flex items-start gap-1 leading-relaxed"><ExternalLink size={10} className="mt-0.5 flex-shrink-0"/> {n.title}</a></li>
                                   ))}
                                 </ul>
                               </td>
@@ -388,21 +411,22 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
             ) : (
               <div className="space-y-6">
                 <CompareMetricChart title="合作达人数" metricSuffix="creators" isRate={false} />
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                  <table className="w-full text-left">
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-x-auto">
+                  <table className="w-full text-left min-w-[600px]">
                     <thead className="bg-slate-50 border-b border-slate-100">
                       <tr><th className="p-3 text-xs font-bold text-slate-500">对比指标</th>{activeBrands.map(b=><th key={b} className="p-3 text-xs font-bold text-indigo-600">{b}</th>)}</tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50 text-[11px] text-slate-700">
-                      <tr><td className="p-3 font-bold">达人总数 (人)</td>{activeBrands.map(b=><td key={b} className="p-3 font-black">{compareStats[b].influencerCount}</td>)}</tr>
-                      <tr><td className="p-3 font-bold">预估总花费 (¥)</td>{activeBrands.map(b=><td key={b} className="p-3">{formatComma(compareStats[b].cost)}</td>)}</tr>
-                      <tr className="bg-slate-50"><td colSpan={activeBrands.length+1} className="p-2 font-bold text-slate-400">达人属性结构详情 (人数 / 平均费用)</td></tr>
+                      <tr><td className="p-3 font-bold text-indigo-500">达人总数 (人, 去重)</td>{activeBrands.map(b=><td key={b} className="p-3 font-black text-indigo-600">{compareStats[b].influencerCount}</td>)}</tr>
+                      <tr><td className="p-3 font-bold text-emerald-500">预估总花费 (¥)</td>{activeBrands.map(b=><td key={b} className="p-3 font-black text-emerald-600">{formatComma(compareStats[b].cost)}</td>)}</tr>
+                      <tr><td className="p-3 font-bold text-amber-500">人均达人花费 (¥/人)</td>{activeBrands.map(b=><td key={b} className="p-3 font-bold text-amber-600">{formatComma(compareStats[b].influencerCount?Math.round(compareStats[b].cost/compareStats[b].influencerCount):0)}</td>)}</tr>
+                      <tr className="bg-slate-50"><td colSpan={activeBrands.length+1} className="p-2 font-bold text-slate-400 text-center">—— 达人属性层级：人数分布 / 该层级平均费用 ——</td></tr>
                       {Array.from(new Set(activeBrands.flatMap(b => compareStats[b].creatorAttrs.map(a=>a.name)))).map((attrName:any, i) => (
                         <tr key={i}>
-                          <td className="p-3">{attrName}</td>
+                          <td className="p-3 font-bold text-slate-600">{attrName}</td>
                           {activeBrands.map(b => {
                             const match = compareStats[b].creatorAttrs.find(a=>a.name===attrName);
-                            return <td key={b} className="p-3">{match ? <span className="font-bold">{match.count}人 <span className="text-emerald-600 font-normal">/ ¥{formatComma(Math.round(match.avgCost))}</span></span> : '-'}</td>
+                            return <td key={b} className="p-3">{match ? <span className="font-bold text-slate-700">{match.count}人 <span className="text-slate-400 font-normal">/ ¥{formatComma(Math.round(match.avgCost))}</span></span> : <span className="text-slate-300">-</span>}</td>
                           })}
                         </tr>
                       ))}
@@ -443,8 +467,7 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
                         <XAxis dataKey="timeLabel" axisLine={false} tickLine={false} tick={{ fontSize: 11 }} />
                         <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#10B981' }} width={40} tickFormatter={(v)=>'¥'+formatNum(v)} />
                         <Tooltip formatter={(v:number)=>'¥'+formatComma(v)} contentStyle={{ borderRadius: '8px', border: 'none' }} />
-                        {/* 需求3: 预估投放费用增加平均线 */}
-                        <ReferenceLine y={overallStats.avg.cost} stroke="#10B981" strokeDasharray="3 3" label={{ position: 'insideTopLeft', value: `全局均值 ¥${formatComma(Math.round(overallStats.avg.cost))}`, fill: '#10B981', fontSize: 10 }} />
+                        <ReferenceLine y={overallStats.avg.cost} stroke="#10B981" strokeDasharray="3 3" label={{ position: 'insideTopLeft', value: `费用${timeLabelText}均值 ¥${formatComma(Math.round(overallStats.avg.cost))}`, fill: '#10B981', fontSize: 10 }} />
                         <Line type="monotone" name="预估费用" dataKey="cost" stroke="#10B981" strokeWidth={3} dot={{ r: 3 }} />
                       </LineChart>
                     </ResponsiveContainer>
@@ -460,7 +483,7 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
                         <XAxis dataKey="timeLabel" axisLine={false} tickLine={false} tick={{ fontSize: 11 }} />
                         <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#F59E0B' }} width={30} />
                         <Tooltip formatter={(v:number)=>'¥'+v.toFixed(2)} contentStyle={{ borderRadius: '8px', border: 'none' }} />
-                        <ReferenceLine y={overallStats.avg.cpe} stroke="#F59E0B" strokeDasharray="3 3" label={{ position: 'insideTopLeft', value: `全局均值 ¥${overallStats.avg.cpe.toFixed(2)}`, fill: '#F59E0B', fontSize: 10 }} />
+                        <ReferenceLine y={overallStats.avg.cpe} stroke="#F59E0B" strokeDasharray="3 3" label={{ position: 'insideTopLeft', value: `全局CPE均值 ¥${overallStats.avg.cpe.toFixed(2)}`, fill: '#F59E0B', fontSize: 10 }} />
                         <Line type="monotone" name="CPE" dataKey="cpe" stroke="#F59E0B" strokeWidth={3} dot={{ r: 3 }} />
                       </LineChart>
                     </ResponsiveContainer>
