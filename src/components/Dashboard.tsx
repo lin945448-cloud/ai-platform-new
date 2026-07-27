@@ -1,14 +1,15 @@
 import React, { useMemo, useState } from 'react';
 import { ParsedData, NoteRecord } from '../types';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, ReferenceLine, LabelList } from 'recharts';
-import { LayoutDashboard, Users, Clapperboard, DollarSign, List, FileText, Zap, ThumbsUp, MessageCircle, Star, ExternalLink, ArrowUpDown } from 'lucide-react';
+import { LayoutDashboard, Users, Clapperboard, DollarSign, List, FileText, Zap, ThumbsUp, MessageCircle, Star, ExternalLink, ArrowUpDown, Award } from 'lucide-react';
 import { NotesTable } from './NotesTable';
 
 interface Props { data: ParsedData; selectedCommercial: string; selectedBrands: string[]; selectedMonths: string[]; analysisMode: 'single' | 'compare'; }
 
-const formatNum = (n: number) => n >= 10000 ? (n / 10000).toFixed(1) + 'w' : n.toLocaleString();
-const formatComma = (n: number) => Number(n).toLocaleString();
-const getTop3 = (arr: any[], key: string) => [...arr].sort((a, b) => b[key] - a[key]).slice(0, 3);
+// 修复白屏Bug：极强容错的数字格式化函数，防止 undefined/NaN 导致系统崩溃
+const formatNum = (n: any) => { const num = Number(n) || 0; return num >= 10000 ? (num / 10000).toFixed(1) + 'w' : num.toLocaleString(); };
+const formatComma = (n: any) => (Number(n) || 0).toLocaleString();
+const getTop3 = (arr: any[], key: string) => [...arr].sort((a, b) => (Number(b[key])||0) - (Number(a[key])||0)).slice(0, 3);
 
 // 核心算力
 function computeStats(records: NoteRecord[], timeUnit: string) {
@@ -58,10 +59,10 @@ function computeStats(records: NoteRecord[], timeUnit: string) {
   })).sort((a, b) => a.timeLabel.localeCompare(b.timeLabel));
 
   const types = Array.from(typeMap.values()).map(v => ({
-    ...v, avgInt: v.interactions / v.count, vPct: (v.vCount/v.count)*100, iPct: (v.iCount/v.count)*100
+    ...v, avgInt: v.count > 0 ? v.interactions / v.count : 0, vPct: v.count > 0 ? (v.vCount/v.count)*100 : 0, iPct: v.count > 0 ? (v.iCount/v.count)*100 : 0
   })).sort((a, b) => b.count - a.count);
 
-  const creatorAttrs = Array.from(creatorAttrMap.values()).map(v => ({ ...v, avgCost: v.cost / v.count })).sort((a,b)=>b.count-a.count);
+  const creatorAttrs = Array.from(creatorAttrMap.values()).map(v => ({ ...v, avgCost: v.count > 0 ? v.cost / v.count : 0 })).sort((a,b)=>b.count-a.count);
   const repeatedCreators = Array.from(creatorNotesMap.values()).filter((c:any) => c.notes.length > 1).sort((a:any,b:any)=>b.notes.length - a.notes.length);
 
   const avg = {
@@ -71,6 +72,7 @@ function computeStats(records: NoteRecord[], timeUnit: string) {
     comments: trends.length ? Math.round(trends.reduce((s,t)=>s+t.comments,0)/trends.length) : 0,
     collects: trends.length ? Math.round(trends.reduce((s,t)=>s+t.collects,0)/trends.length) : 0,
     cpe: trends.length ? (trends.reduce((s,t)=>s+t.cpe,0)/trends.length) : 0,
+    cost: trends.length ? (trends.reduce((s,t)=>s+t.cost,0)/trends.length) : 0, // 新增平均费用计算
   };
 
   return { 
@@ -165,22 +167,25 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
     </div>
   );
 
+  // 需求修改：排行榜改为一行一个，内部横向排开前3名
   const Top3Ranking = ({ title, records, dataKey, icon, label }: any) => (
-    <div className="flex-1 min-w-[300px] bg-white border border-slate-100 rounded-xl p-3 shadow-sm">
+    <div className="bg-white border border-slate-100 rounded-xl p-3 shadow-sm mb-4">
       <h4 className="text-xs font-bold text-slate-700 mb-3 flex items-center gap-1.5 pb-2 border-b border-slate-50">{icon} {title} TOP3</h4>
-      <div className="space-y-2">
+      <div className="grid grid-cols-3 gap-3">
         {records.map((r:any, i:number) => (
-          <div key={i} className="flex gap-2 items-start p-2 rounded-lg hover:bg-slate-50 transition-colors">
-            <div className={`w-5 h-5 rounded flex-shrink-0 flex items-center justify-center text-[10px] font-black ${i===0?'bg-amber-100 text-amber-600':i===1?'bg-slate-200 text-slate-600':i===2?'bg-orange-100 text-orange-600':'bg-slate-50 text-slate-400'}`}>{i+1}</div>
+          <div key={i} className="flex gap-2 items-start p-2 rounded-lg bg-slate-50/50 hover:bg-slate-100 transition-colors border border-slate-100">
+            <div className={`w-5 h-5 rounded flex-shrink-0 flex items-center justify-center text-[10px] font-black mt-0.5 ${i===0?'bg-amber-100 text-amber-600':i===1?'bg-slate-200 text-slate-600':i===2?'bg-orange-100 text-orange-600':'bg-slate-50 text-slate-400'}`}>{i+1}</div>
             <div className="flex-1 min-w-0">
-              <a href={r.noteLink!=='未知'?r.noteLink:'#'} target="_blank" rel="noreferrer" className="text-[11px] font-bold text-indigo-600 hover:underline line-clamp-1 flex items-center gap-1">{r.title} <ExternalLink size={8}/></a>
-              <div className="flex items-center gap-1.5 mt-1 text-[10px] text-slate-500">
-                <span className="bg-slate-100 px-1 rounded">{r.noteType}</span>
-                <a href={(r as any).xhsUrl||'#'} target="_blank" rel="noreferrer" className="hover:text-indigo-500 font-medium truncate">{r.influencerName}</a>
-                <span className="text-slate-300">|</span> <span>{r.influencerType} ({formatNum(r.followers)}粉)</span>
+              <a href={r.noteLink && r.noteLink!=='未知'?r.noteLink:'#'} target="_blank" rel="noreferrer" className="text-[11px] font-bold text-indigo-600 hover:underline line-clamp-2 leading-snug">{r.title} <ExternalLink size={8} className="inline"/></a>
+              <div className="flex flex-col gap-0.5 mt-1 text-[10px] text-slate-500">
+                <span className="w-fit bg-white border border-slate-200 px-1 rounded shadow-sm">{r.noteType}</span>
+                <span className="truncate">
+                  <a href={r.xhsUrl||'#'} target="_blank" rel="noreferrer" className="hover:text-indigo-500 font-bold">{r.influencerName}</a>
+                  <span className="mx-1">·</span>{r.influencerType} ({formatNum(r.followers)}粉)
+                </span>
               </div>
             </div>
-            <div className="text-right flex-shrink-0"><p className="text-xs font-black text-slate-800">{formatComma(r[dataKey])}</p><p className="text-[9px] text-slate-400">{label}</p></div>
+            <div className="text-right flex-shrink-0 ml-1"><p className="text-xs font-black text-slate-800">{formatComma(r[dataKey])}</p><p className="text-[9px] text-slate-400">{label}</p></div>
           </div>
         ))}
       </div>
@@ -197,9 +202,9 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
 
     return (
       <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 space-y-4">
-        <h3 className="text-sm font-black text-slate-800 flex items-center gap-2 border-l-4 border-indigo-500 pl-2">{bName} 内容赛道剖析</h3>
+        <h3 className="text-sm font-black text-slate-800 flex items-center gap-2 border-l-4 border-indigo-500 pl-2">{bName} 内容深度剖析</h3>
         
-        {/* 新增：最上面的总篇数和形式占比概要 */}
+        {/* 顶部总篇数和形式占比概要 */}
         <div className="flex gap-4 mb-2">
           <div className="bg-white rounded-xl p-3 border border-slate-200 shadow-sm flex items-center gap-4 pr-6">
             <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center"><FileText className="text-indigo-500" size={18}/></div>
@@ -220,12 +225,22 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
           </div>
         </div>
 
+        {/* 需求2：四大排行榜挪到赛道表格上方，且一行一个独立模块 */}
+        <div className="flex flex-col">
+          <Top3Ranking title="互动量最高" records={stats.topInt} dataKey="interactions" icon={<Zap size={14} className="text-indigo-500"/>} label="互动" />
+          <Top3Ranking title="点赞量最高" records={stats.topLikes} dataKey="likes" icon={<ThumbsUp size={14} className="text-rose-500"/>} label="点赞" />
+          <Top3Ranking title="评论量最高" records={stats.topComments} dataKey="comments" icon={<MessageCircle size={14} className="text-violet-500"/>} label="评论" />
+          <Top3Ranking title="收藏量最高" records={stats.topCollects} dataKey="collects" icon={<Star size={14} className="text-amber-500"/>} label="收藏" />
+        </div>
+
+        {/* 排序表格 */}
+        <h4 className="text-xs font-bold text-slate-700 flex items-center gap-1.5 pt-2"><LayoutDashboard size={14} className="text-indigo-500"/> 赛道明细数据穿透</h4>
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
           <table className="w-full text-left">
             <thead className="bg-slate-50 border-b border-slate-100"><tr className="text-[11px] text-slate-500">
               <th className="p-3">赛道名称</th>
-              <th className={thClass} onClick={()=>handleSort('count')}><div className="flex items-center gap-1">篇数 <ArrowUpDown size={10}/></div></th>
-              <th className={thClass} onClick={()=>handleSort('interactions')}><div className="flex items-center gap-1">总互动量 <ArrowUpDown size={10}/></div></th>
+              <th className={thClass} onClick={()=>handleSort('count')}><div className="flex items-center gap-1 hover:text-indigo-600">篇数 <ArrowUpDown size={10}/></div></th>
+              <th className={thClass} onClick={()=>handleSort('interactions')}><div className="flex items-center gap-1 hover:text-indigo-600">总互动量 <ArrowUpDown size={10}/></div></th>
               <th className={`${thClass} text-indigo-600`} onClick={()=>handleSort('avgInt')}><div className="flex items-center gap-1">篇均互动量 <ArrowUpDown size={10}/></div></th>
               <th className="p-3">视频占比</th><th className="p-3">图文占比</th>
             </tr></thead>
@@ -239,13 +254,6 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
               ))}
             </tbody>
           </table>
-        </div>
-
-        <div className="flex flex-wrap gap-4">
-          <Top3Ranking title="互动最高" records={stats.topInt} dataKey="interactions" icon={<Zap size={14} className="text-indigo-500"/>} label="互动" />
-          <Top3Ranking title="点赞最高" records={stats.topLikes} dataKey="likes" icon={<ThumbsUp size={14} className="text-rose-500"/>} label="点赞" />
-          <Top3Ranking title="评论最高" records={stats.topComments} dataKey="comments" icon={<MessageCircle size={14} className="text-violet-500"/>} label="评论" />
-          <Top3Ranking title="收藏最高" records={stats.topCollects} dataKey="collects" icon={<Star size={14} className="text-amber-500"/>} label="收藏" />
         </div>
       </div>
     );
@@ -284,12 +292,10 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
                 <SingleMetricChart title="互动" dataKey="interactions" rateKey={null} color="#6366F1" rateColor="" avg={overallStats.avg.interactions} />
                 <SingleMetricChart title="点赞" dataKey="likes" rateKey="likeRate" color="#F43F5E" rateColor="#14B8A6" avg={overallStats.avg.likes} />
                 <SingleMetricChart title="评论" dataKey="comments" rateKey="commentRate" color="#8B5CF6" rateColor="#14B8A6" avg={overallStats.avg.comments} />
-                {/* 需求1：收藏改成琥珀色，占比线改色 */}
                 <SingleMetricChart title="收藏" dataKey="collects" rateKey="collectRate" color="#F59E0B" rateColor="#14B8A6" avg={overallStats.avg.collects} />
               </>
             ) : (
               <>
-                {/* 竞品对比图表及占比对比 */}
                 <CompareMetricChart title="篇数" metricSuffix="notes" isRate={false} />
                 <CompareMetricChart title="互动量" metricSuffix="int" isRate={false} />
                 <CompareMetricChart title="点赞量" metricSuffix="likes" isRate={false} />
@@ -319,7 +325,6 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
           <div className="space-y-6 animate-fade-in pt-2">
             {analysisMode === 'single' ? (
               <>
-                {/* 达人总数看板 */}
                 <div className="grid grid-cols-3 gap-4 mb-4">
                   <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 shadow-sm text-center">
                     <p className="text-xs text-indigo-500 font-bold mb-1">合作达人总数 (去重)</p>
@@ -351,7 +356,6 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
                   </div>
                 </div>
 
-                {/* 需求3：复投达人明细表 */}
                 {overallStats.repeatedCreators.length > 0 && (
                   <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
                     <h3 className="text-xs font-bold text-slate-700 mb-4 flex items-center gap-1.5"><Award size={14} className="text-rose-500" /> 高频复投达人明细清单</h3>
@@ -369,7 +373,7 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
                               <td className="p-3">
                                 <ul className="space-y-1.5">
                                   {c.notes.map((n:any, idx:number)=>(
-                                    <li key={idx}><a href={n.noteLink!=='未知'?n.noteLink:'#'} target="_blank" rel="noreferrer" className="text-indigo-600 hover:underline flex items-start gap-1"><ExternalLink size={10} className="mt-0.5 flex-shrink-0"/> {n.title}</a></li>
+                                    <li key={idx}><a href={n.noteLink!=='未知'?n.noteLink:'#'} target="_blank" rel="noreferrer" className="text-indigo-600 hover:underline flex items-start gap-1 leading-relaxed"><ExternalLink size={10} className="mt-1 flex-shrink-0"/> {n.title}</a></li>
                                   ))}
                                 </ul>
                               </td>
@@ -415,7 +419,6 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
           <div className="space-y-6 animate-fade-in pt-2">
             {analysisMode === 'single' ? (
               <>
-                {/* 需求4：完美复刻截图卡片样式 */}
                 <div className="flex gap-4 mb-2">
                   <div className="flex-1 bg-white border border-slate-200 shadow-sm rounded-xl p-5 relative overflow-hidden">
                     <p className="text-xs text-slate-500 mb-2">总预估投放</p>
@@ -440,6 +443,8 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
                         <XAxis dataKey="timeLabel" axisLine={false} tickLine={false} tick={{ fontSize: 11 }} />
                         <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#10B981' }} width={40} tickFormatter={(v)=>'¥'+formatNum(v)} />
                         <Tooltip formatter={(v:number)=>'¥'+formatComma(v)} contentStyle={{ borderRadius: '8px', border: 'none' }} />
+                        {/* 需求3: 预估投放费用增加平均线 */}
+                        <ReferenceLine y={overallStats.avg.cost} stroke="#10B981" strokeDasharray="3 3" label={{ position: 'insideTopLeft', value: `全局均值 ¥${formatComma(Math.round(overallStats.avg.cost))}`, fill: '#10B981', fontSize: 10 }} />
                         <Line type="monotone" name="预估费用" dataKey="cost" stroke="#10B981" strokeWidth={3} dot={{ r: 3 }} />
                       </LineChart>
                     </ResponsiveContainer>
