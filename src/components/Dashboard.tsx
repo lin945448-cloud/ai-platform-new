@@ -1,385 +1,261 @@
 import React, { useMemo, useState } from 'react';
 import { ParsedData, NoteRecord } from '../types';
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, LabelList, ReferenceLine } from 'recharts';
-import { Users, FileText, Zap, DollarSign, LayoutDashboard, List, Clapperboard, Award, ExternalLink, Repeat, HelpCircle, Trophy, ThumbsUp, MessageCircle, Star, Sparkles } from 'lucide-react';
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, ReferenceLine, LabelList } from 'recharts';
+import { LayoutDashboard, Users, Clapperboard, DollarSign, List, FileText, Zap, ThumbsUp, MessageCircle, Star, Share2, Award, ExternalLink } from 'lucide-react';
 import { NotesTable } from './NotesTable';
 
-interface Props { 
-  data: ParsedData; 
-  selectedCommercial: string; 
-  selectedBrands: string[]; 
-  selectedMonths: string[]; 
-  analysisMode: 'single' | 'compare';
+interface Props { data: ParsedData; selectedCommercial: string; selectedBrands: string[]; selectedMonths: string[]; analysisMode: 'single' | 'compare'; }
+
+const formatNum = (n: number) => n >= 10000 ? (n / 10000).toFixed(1) + 'w' : n.toLocaleString();
+const formatComma = (n: number) => Number(n).toLocaleString();
+const getTop3 = (arr: any[], key: string) => [...arr].sort((a, b) => b[key] - a[key]).slice(0, 3);
+
+// 核心算力：独立计算某一批数据的统计值
+function computeStats(records: NoteRecord[], timeUnit: string) {
+  let cost=0, interactions=0, likes=0, comments=0, collects=0, shares=0, videoCount=0, imageCount=0;
+  const trendMap = new Map();
+  const typeMap = new Map();
+  const creatorAttrMap = new Map();
+  const creatorsSet = new Set();
+
+  records.forEach(r => {
+    cost += r.estimatedCost; interactions += r.interactions; likes += r.likes; comments += r.comments; collects += r.collects; shares += r.shares;
+    r.noteForm.includes('视频') ? videoCount++ : imageCount++;
+    creatorsSet.add(r.influencerId);
+
+    const t = (r as any)[timeUnit];
+    if (t && t !== '未知') {
+      const ex = trendMap.get(t) || { time: t, notes: 0, interactions: 0, likes: 0, comments: 0, collects: 0, cost: 0, creators: new Set() };
+      ex.notes++; ex.interactions += r.interactions; ex.likes += r.likes; ex.comments += r.comments; ex.collects += r.collects; ex.cost += r.estimatedCost; ex.creators.add(r.influencerId);
+      trendMap.set(t, ex);
+    }
+
+    const nType = r.noteType || '未知';
+    const ext = typeMap.get(nType) || { name: nType, count: 0, interactions: 0, vCount: 0, iCount: 0 };
+    ext.count++; ext.interactions += r.interactions; r.noteForm.includes('视频') ? ext.vCount++ : ext.iCount++;
+    typeMap.set(nType, ext);
+
+    const attr = r.influencerType || '未知属性';
+    const exa = creatorAttrMap.get(attr) || { name: attr, count: 0, cost: 0 };
+    exa.count++; exa.cost += r.estimatedCost;
+    creatorAttrMap.set(attr, exa);
+  });
+
+  const notes = records.length;
+  const cpe = interactions > 0 ? cost / interactions : 0;
+  
+  const trends = Array.from(trendMap.values()).map(v => ({
+    timeLabel: timeUnit === 'date' ? v.time.slice(5) : v.time,
+    notes: v.notes, interactions: v.interactions, likes: v.likes, comments: v.comments, collects: v.collects, cost: v.cost, creators: v.creators.size,
+    cpe: v.interactions > 0 ? v.cost / v.interactions : 0,
+    likeRate: v.interactions > 0 ? (v.likes/v.interactions)*100 : 0,
+    commentRate: v.interactions > 0 ? (v.comments/v.interactions)*100 : 0,
+    collectRate: v.interactions > 0 ? (v.collects/v.interactions)*100 : 0,
+  })).sort((a, b) => a.timeLabel.localeCompare(b.timeLabel));
+
+  const types = Array.from(typeMap.values()).map(v => ({
+    ...v, avgInt: v.interactions / v.count, vPct: (v.vCount/v.count)*100, iPct: (v.iCount/v.count)*100
+  })).sort((a, b) => b.count - a.count);
+
+  const creatorAttrs = Array.from(creatorAttrMap.values()).map(v => ({ ...v, avgCost: v.cost / v.count })).sort((a,b)=>b.count-a.count);
+
+  const avg = {
+    interactions: trends.length ? Math.round(trends.reduce((s,t)=>s+t.interactions,0)/trends.length) : 0,
+    likes: trends.length ? Math.round(trends.reduce((s,t)=>s+t.likes,0)/trends.length) : 0,
+    comments: trends.length ? Math.round(trends.reduce((s,t)=>s+t.comments,0)/trends.length) : 0,
+    collects: trends.length ? Math.round(trends.reduce((s,t)=>s+t.collects,0)/trends.length) : 0,
+    cpe: trends.length ? (trends.reduce((s,t)=>s+t.cpe,0)/trends.length) : 0,
+  };
+
+  return { 
+    records, notes, interactions, likes, comments, collects, shares, cost, cpe, 
+    videoCount, imageCount, influencerCount: creatorsSet.size, 
+    trends, types, creatorAttrs, avg,
+    topInt: getTop3(records, 'interactions'), topLikes: getTop3(records, 'likes'), topComments: getTop3(records, 'comments'), topCollects: getTop3(records, 'collects')
+  };
 }
 
 export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedBrands, selectedMonths, analysisMode }) => {
   const [activeTab, setActiveTab] = useState<'overview' | 'content' | 'creators' | 'cost' | 'details'>('overview');
 
-  // 当前生效的品牌列表
-  const activeBrands = useMemo(() => {
-    if (selectedBrands.length > 0) return selectedBrands;
-    return data.brands.length > 0 ? [data.brands[0]] : [];
-  }, [selectedBrands, data.brands]);
+  const { overallStats, compareStats, timeUnit, allTimeLabels, activeBrands } = useMemo(() => {
+    let validRecords = data.records.filter(r => selectedCommercial === '全部' || (r as any).isCommercial === selectedCommercial);
+    if (selectedMonths.length > 0) validRecords = validRecords.filter(r => selectedMonths.includes(r.month));
+    const tu = selectedMonths.length === 1 ? 'date' : 'month';
+    
+    // 单品牌模式：根据下拉筛选合并
+    let singleRecords = validRecords;
+    if (analysisMode === 'single' && selectedBrands.length > 0) singleRecords = validRecords.filter(r => selectedBrands.includes(r.reportedBrand));
+    const os = computeStats(singleRecords, tu);
 
-  // 数据过滤核心逻辑
-  const filteredRecords = useMemo(() => {
-    return data.records.filter(r => {
-      const isCom = (r as any).isCommercial;
-      const matchCom = selectedCommercial === '全部' || isCom === selectedCommercial;
-      const matchBrand = analysisMode === 'single' 
-        ? (activeBrands.includes(r.reportedBrand))
-        : (selectedBrands.length === 0 || selectedBrands.includes(r.reportedBrand));
-      const matchMonth = selectedMonths.length === 0 || selectedMonths.includes(r.month);
-      return matchCom && matchBrand && matchMonth;
-    });
-  }, [data.records, selectedCommercial, selectedBrands, selectedMonths, analysisMode, activeBrands]);
+    // 对比模式：提取每个品牌
+    const ab = analysisMode === 'compare' ? (selectedBrands.length > 0 ? selectedBrands : data.brands) : [];
+    const cs: Record<string, ReturnType<typeof computeStats>> = {};
+    ab.forEach(b => cs[b] = computeStats(validRecords.filter(r => r.reportedBrand === b), tu));
 
-  // 1. 各个品牌单独拆分出来的基础统计 (对比分析模式核心依赖)
-  const brandStatsMap = useMemo(() => {
-    const map = new Map<string, any>();
-    data.brands.forEach(brand => {
-      const bRecords = data.records.filter(r => {
-        const isCom = (r as any).isCommercial;
-        const matchCom = selectedCommercial === '全部' || isCom === selectedCommercial;
-        const matchMonth = selectedMonths.length === 0 || selectedMonths.includes(r.month);
-        return r.reportedBrand === brand && matchCom && matchMonth;
-      });
-
-      if (bRecords.length === 0) return;
-
-      const totalCost = bRecords.reduce((s, r) => s + r.estimatedCost, 0);
-      const totalInt = bRecords.reduce((s, r) => s + r.interactions, 0);
-      const totalLikes = bRecords.reduce((s, r) => s + r.likes, 0);
-      const totalCom = bRecords.reduce((s, r) => s + r.comments, 0);
-      const totalCol = bRecords.reduce((s, r) => s + r.collects, 0);
-      const totalShare = bRecords.reduce((s, r) => s + r.shares, 0);
-      
-      const uCreators = Array.from(new Map(bRecords.map(r => [r.influencerId, r])).values());
-      const totalFollowers = uCreators.reduce((s, r) => s + r.followers, 0);
-
-      // 计算指标
-      const avgCost = uCreators.length > 0 ? (totalCost / uCreators.length).toFixed(0) : '0';
-      const cpe = totalInt > 0 ? (totalCost / totalInt).toFixed(2) : '0.00';
-      const cpf = totalFollowers > 0 ? (totalCost / totalFollowers).toFixed(2) : '0.00';
-
-      // 赛道明细计算
-      const tracksMap = new Map<string, any>();
-      bRecords.forEach(r => {
-        const type = r.noteType || '未知赛道';
-        const curr = tracksMap.get(type) || { name: type, count: 0, interactions: 0, video: 0, image: 0 };
-        curr.count += 1;
-        curr.interactions += r.interactions;
-        if (r.noteForm.includes('视频')) curr.video += 1; else curr.image += 1;
-        tracksMap.set(type, curr);
-      });
-      const trackDetails = Array.from(tracksMap.values()).map(t => ({
-        ...t,
-        avgInt: Math.round(t.interactions / t.count),
-        videoPct: Math.round((t.video / t.count) * 100),
-        imagePct: Math.round((t.image / t.count) * 100),
-      })).sort((a,b) => b.interactions - a.interactions);
-
-      // 排行榜前3名
-      const topInteractions = [...bRecords].sort((a,b) => b.interactions - a.interactions).slice(0, 3);
-      const topLikes = [...bRecords].sort((a,b) => b.likes - a.likes).slice(0, 3);
-      const topComments = [...bRecords].sort((a,b) => b.comments - a.comments).slice(0, 3);
-      const topCollects = [...bRecords].sort((a,b) => b.collects - a.collects).slice(0, 3);
-
-      // 月度趋势
-      const monthMap = new Map<string, number>();
-      bRecords.forEach(r => {
-        monthMap.set(r.month, (monthMap.get(r.month) || 0) + r.interactions);
-      });
-
-      map.set(brand, {
-        records: bRecords,
-        notesCount: bRecords.length,
-        totalCost,
-        totalInt,
-        totalLikes,
-        totalCom,
-        totalCol,
-        totalShare,
-        cpe,
-        cpf,
-        creatorsCount: uCreators.length,
-        avgCost,
-        trackDetails,
-        topInteractions,
-        topLikes,
-        topComments,
-        topCollects,
-        monthMap
-      });
-    });
-    return map;
-  }, [data.records, data.brands, selectedCommercial, selectedMonths]);
-
-  // 全局/过滤合并指标统计
-  const stats = useMemo(() => {
-    const notes = filteredRecords.length;
-    const interactions = filteredRecords.reduce((s, r) => s + r.interactions, 0);
-    const cost = filteredRecords.reduce((s, r) => s + r.estimatedCost, 0);
-    const likes = filteredRecords.reduce((s, r) => s + r.likes, 0);
-    const comments = filteredRecords.reduce((s, r) => s + r.comments, 0);
-    const collects = filteredRecords.reduce((s, r) => s + r.collects, 0);
-    const shares = filteredRecords.reduce((s, r) => s + r.shares, 0);
-    const cpe = interactions > 0 ? (cost / interactions).toFixed(2) : '0.00';
-    const influencerCount = new Set(filteredRecords.map(r => r.influencerId)).size;
-
-    // 平均值
-    const avgLikes = notes > 0 ? Math.round(likes / notes) : 0;
-    const avgComments = notes > 0 ? Math.round(comments / notes) : 0;
-    const avgCollects = notes > 0 ? Math.round(collects / notes) : 0;
-    const avgInteractions = notes > 0 ? Math.round(interactions / notes) : 0;
-
-    const timeUnit = selectedMonths.length === 1 ? 'date' : 'month';
-    const trendMap = new Map();
-    let videoCount = 0; let imageCount = 0;
-    const creatorNotesMap = new Map<string, { count: number; name: string; type: string; followers: number; xhsUrl: string; brand: string }>();
-
-    filteredRecords.forEach(r => {
-      if (r.noteForm.includes('视频')) videoCount++; else imageCount++;
-
-      const cInfo = creatorNotesMap.get(r.influencerId) || { count: 0, name: r.influencerName, type: r.influencerType, followers: r.followers, xhsUrl: (r as any).xhsUrl, brand: r.reportedBrand };
-      cInfo.count += 1;
-      creatorNotesMap.set(r.influencerId, cInfo);
-
-      const t = r[timeUnit];
-      if (t && t !== '未知') {
-        const ex = trendMap.get(t) || { time: t, notes: 0, interactions: 0, likes: 0, comments: 0, collects: 0, cost: 0, brandsMap: new Map() };
-        ex.notes += 1; 
-        ex.interactions += r.interactions; 
-        ex.likes += r.likes;
-        ex.comments += r.comments;
-        ex.collects += r.collects;
-        ex.cost += r.estimatedCost;
-        
-        // 记录不同品牌的互动，画竞品对比图时用
-        ex.brandsMap.set(r.reportedBrand, (ex.brandsMap.get(r.reportedBrand) || 0) + r.interactions);
-        trendMap.set(t, ex);
-      }
-    });
-
-    const repeatedCreators = Array.from(creatorNotesMap.values()).filter(c => c.count > 1).sort((a, b) => b.count - a.count);
-
-    // 格式化图表趋势数据
-    const trends = Array.from(trendMap.values()).map(v => {
-      const brandData: any = {};
-      v.brandsMap.forEach((val: number, key: string) => {
-        brandData[`int_${key}`] = val; // int_Tempo得宝: 1234
-      });
-
-      return { 
-        ...v, 
-        timeLabel: timeUnit === 'date' ? v.time.slice(5) : v.time,
-        // 各项指标占互动量的百分比折线
-        likesRatio: v.interactions > 0 ? Number(((v.likes / v.interactions) * 100).toFixed(1)) : 0,
-        commentsRatio: v.interactions > 0 ? Number(((v.comments / v.interactions) * 100).toFixed(1)) : 0,
-        collectsRatio: v.interactions > 0 ? Number(((v.collects / v.interactions) * 100).toFixed(1)) : 0,
-        cpe: v.interactions > 0 ? Number((v.cost / v.interactions).toFixed(2)) : 0,
-        ...brandData
-      };
-    }).sort((a, b) => a.time.localeCompare(b.time));
-
-    // 达人属性
-    const creatorAttrMap = new Map();
-    filteredRecords.forEach(r => {
-      const attr = r.influencerType || '未知属性';
-      const exa = creatorAttrMap.get(attr) || { name: attr, count: 0, cost: 0, uCreators: new Set() };
-      exa.count += 1;
-      exa.cost += r.estimatedCost;
-      exa.uCreators.add(r.influencerId);
-      creatorAttrMap.set(attr, exa);
-    });
-
-    const creatorAttrs = Array.from(creatorAttrMap.values()).map(v => {
-      const totalBrandCost = filteredRecords.reduce((s, r) => s + r.estimatedCost, 0);
-      const totalBrandNotes = filteredRecords.length;
-      return {
-        name: v.name,
-        count: v.count,
-        cost: v.cost,
-        uCount: v.uCreators.size,
-        avgCost: v.uCreators.size > 0 ? Math.round(v.cost / v.uCreators.size) : 0,
-        notePct: totalBrandNotes > 0 ? Math.round((v.count / totalBrandNotes) * 100) : 0,
-        costPct: totalBrandCost > 0 ? Math.round((v.cost / totalBrandCost) * 100) : 0,
-      };
-    }).sort((a, b) => b.count - a.count);
-
-    return { 
-      notes, interactions, cost, cpe, likes, comments, collects, shares, influencerCount, 
-      repeatedCreators, trends, creatorAttrs, videoCount, imageCount,
-      videoPct: notes > 0 ? Math.round((videoCount / notes) * 100) : 0, 
-      imagePct: notes > 0 ? Math.round((imageCount / notes) * 100) : 0, 
-      isDaily: timeUnit === 'date',
-      avgLikes, avgComments, avgCollects, avgInteractions
-    };
-  }, [filteredRecords, selectedMonths]);
+    const tl = Array.from(new Set(validRecords.map(r => tu === 'date' ? r.date.slice(5) : r.month))).sort();
+    return { overallStats: os, compareStats: cs, timeUnit: tu, allTimeLabels: tl, activeBrands: ab };
+  }, [data.records, selectedCommercial, selectedBrands, selectedMonths, analysisMode]);
 
   if (data.totalNotes === 0) return <div className="h-full bg-white rounded-2xl flex justify-center items-center text-slate-400 font-bold">请先上传数据文件</div>;
+  if (analysisMode === 'compare' && activeBrands.length === 0) return <div className="h-full bg-white rounded-2xl flex justify-center items-center text-slate-400 font-bold">请在上方勾选需要对比的品牌</div>;
 
-  const formatNum = (n: number) => n >= 10000 ? (n / 10000).toFixed(1) + 'w' : n.toLocaleString();
-  const formatComma = (n: number) => Number(n).toLocaleString();
+  const isDaily = timeUnit === 'date';
+  const displayTitle = analysisMode === 'single' ? (selectedBrands.length === 1 ? selectedBrands[0] : (selectedBrands.length===0?'全部品牌概览':'聚合品牌概览')) : '竞品对比模式';
+  const colors = ['#6366F1', '#14B8A6', '#F59E0B', '#EC4899', '#8B5CF6'];
 
-  // 辅助渲染前3排行榜组件
-  const renderTop3List = (list: NoteRecord[], titleName: string, metricKey: 'interactions' | 'likes' | 'comments' | 'collects', metricName: string) => {
-    return (
-      <div className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm space-y-2.5">
-        <h4 className="text-xs font-black text-slate-800 flex items-center gap-1">
-          <Trophy size={14} className="text-amber-500" /> {titleName}排行榜
-        </h4>
-        {list.map((note, i) => {
-          const xhsUrl = (note as any).xhsUrl;
-          return (
-            <div key={i} className="flex items-start justify-between gap-2 p-2 hover:bg-slate-50 rounded-lg transition-colors border-b border-dashed border-slate-100 last:border-0">
-              <div className="flex-1 min-w-0 space-y-1">
-                <div className="flex items-center gap-1.5">
-                  <span className={`w-4 h-4 rounded text-[10px] font-black flex items-center justify-center ${i===0?'bg-amber-100 text-amber-600':i===1?'bg-slate-100 text-slate-500':'bg-orange-50 text-orange-600'}`}>{i+1}</span>
-                  <span className="text-[10px] font-bold text-indigo-500 bg-indigo-50 px-1.5 rounded">{note.noteType}</span>
-                </div>
-                {note.noteLink ? (
-                  <a href={note.noteLink} target="_blank" rel="noreferrer" className="text-xs font-bold text-slate-700 hover:text-indigo-600 line-clamp-1 block leading-tight">{note.title}</a>
-                ) : (
-                  <p className="text-xs font-bold text-slate-700 line-clamp-1 leading-tight">{note.title}</p>
-                )}
-                <div className="flex items-center gap-1 text-[10px] text-slate-400 font-medium truncate">
-                  {xhsUrl ? (
-                    <a href={xhsUrl} target="_blank" rel="noreferrer" className="text-indigo-500 hover:underline font-bold">{note.influencerName}</a>
-                  ) : (
-                    <span>{note.influencerName}</span>
-                  )}
-                  <span>·</span><span>{note.influencerType}</span><span>·</span><span>{formatNum(note.followers)}粉</span>
-                </div>
-              </div>
-              <div className="text-right flex-shrink-0">
-                <p className="text-xs font-black text-indigo-600">{formatComma(note[metricKey])}</p>
-                <p className="text-[9px] text-slate-400 font-bold">{metricName}</p>
+  // 构造对比统一趋势表
+  const compareTrends = allTimeLabels.map(time => {
+    const row: any = { timeLabel: time };
+    activeBrands.forEach(b => {
+      const t = compareStats[b].trends.find(x => x.timeLabel === time);
+      row[`${b}_int`] = t?.interactions || 0; row[`${b}_likes`] = t?.likes || 0; row[`${b}_comments`] = t?.comments || 0; row[`${b}_collects`] = t?.collects || 0;
+      row[`${b}_notes`] = t?.notes || 0; row[`${b}_creators`] = t?.creators || 0; row[`${b}_cost`] = t?.cost || 0; row[`${b}_cpe`] = t?.cpe || 0;
+    });
+    return row;
+  });
+
+  // ========== UI 组件区 ==========
+  const SingleMetricChart = ({ title, dataKey, rateKey, color, avg }: any) => (
+    <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+      <div className="flex justify-between items-center mb-3">
+        <h3 className="text-xs font-bold text-slate-700">{title}推移</h3>
+        <span className="text-[10px] font-bold text-slate-500 bg-white px-2 py-1 rounded-md shadow-sm border border-slate-100">日均: {formatComma(avg)}</span>
+      </div>
+      <div className="h-56">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={overallStats.trends}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+            <XAxis dataKey="timeLabel" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#94a3b8' }} />
+            <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: color }} width={40} tickFormatter={formatNum} />
+            {rateKey && <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#F59E0B' }} width={30} tickFormatter={(v)=>v+'%'}/>}
+            <Tooltip formatter={(value: number, name: string) => name.includes('占比') ? value.toFixed(1)+'%' : formatComma(value)} contentStyle={{ borderRadius: '8px', border: 'none' }} />
+            <Legend iconType="circle" wrapperStyle={{ fontSize: '11px' }} />
+            <ReferenceLine yAxisId="left" y={avg} stroke={color} strokeDasharray="3 3" opacity={0.5} />
+            <Line yAxisId="left" type="monotone" name={`${title}量`} dataKey={dataKey} stroke={color} strokeWidth={3} dot={{ r: 3 }} />
+            {rateKey && <Line yAxisId="right" type="monotone" name={`占互动比例`} dataKey={rateKey} stroke="#F59E0B" strokeWidth={2} dot={false} opacity={0.8} />}
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+
+  const CompareMetricChart = ({ title, metricSuffix }: any) => (
+    <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+      <h3 className="text-xs font-bold text-slate-700 mb-3">{title}对比推移</h3>
+      <div className="h-56">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={compareTrends}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+            <XAxis dataKey="timeLabel" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#94a3b8' }} />
+            <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11 }} width={40} tickFormatter={formatNum} />
+            <Tooltip formatter={(value: number) => formatComma(value)} contentStyle={{ borderRadius: '8px', border: 'none' }} />
+            <Legend iconType="circle" wrapperStyle={{ fontSize: '11px' }} />
+            {activeBrands.map((b, i) => (
+              <Line key={b} type="monotone" name={b} dataKey={`${b}_${metricSuffix}`} stroke={colors[i%colors.length]} strokeWidth={3} dot={{ r: 3 }} />
+            ))}
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+
+  const Top3Ranking = ({ title, records, dataKey, icon, label }: any) => (
+    <div className="flex-1 min-w-[300px] bg-white border border-slate-100 rounded-xl p-3 shadow-sm">
+      <h4 className="text-xs font-bold text-slate-700 mb-3 flex items-center gap-1.5 pb-2 border-b border-slate-50">{icon} {title} TOP3</h4>
+      <div className="space-y-2">
+        {records.map((r:any, i:number) => (
+          <div key={i} className="flex gap-2 items-start p-2 rounded-lg hover:bg-slate-50 transition-colors">
+            <div className={`w-5 h-5 rounded flex-shrink-0 flex items-center justify-center text-[10px] font-black ${i===0?'bg-amber-100 text-amber-600':i===1?'bg-slate-200 text-slate-600':i===2?'bg-orange-100 text-orange-600':'bg-slate-50 text-slate-400'}`}>{i+1}</div>
+            <div className="flex-1 min-w-0">
+              <a href={r.noteLink!=='未知'?r.noteLink:'#'} target="_blank" rel="noreferrer" className="text-[11px] font-bold text-indigo-600 hover:underline line-clamp-1 flex items-center gap-1">{r.title} <ExternalLink size={8}/></a>
+              <div className="flex items-center gap-1.5 mt-1 text-[10px] text-slate-500">
+                <span className="bg-slate-100 px-1 rounded">{r.noteType}</span>
+                <a href={r.xhsUrl||'#'} target="_blank" rel="noreferrer" className="hover:text-indigo-500 font-medium truncate">{r.influencerName}</a>
+                <span className="text-slate-300">|</span> <span>{r.influencerType} ({formatNum(r.followers)}粉)</span>
               </div>
             </div>
-          );
-        })}
+            <div className="text-right flex-shrink-0"><p className="text-xs font-black text-slate-800">{formatComma(r[dataKey])}</p><p className="text-[9px] text-slate-400">{label}</p></div>
+          </div>
+        ))}
       </div>
-    );
-  };
+    </div>
+  );
+
+  const ContentDetailBlock = ({ stats, bName }: any) => (
+    <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 space-y-4">
+      <h3 className="text-sm font-black text-slate-800 flex items-center gap-2 border-l-4 border-indigo-500 pl-2">{bName} 内容赛道剖析</h3>
+      
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <table className="w-full text-left">
+          <thead className="bg-slate-50 border-b border-slate-100"><tr className="text-[11px] text-slate-500">
+            <th className="p-3">赛道名称</th><th className="p-3">篇数</th><th className="p-3">总互动量</th><th className="p-3 text-indigo-600">篇均互动量</th><th className="p-3">视频占比</th><th className="p-3">图文占比</th>
+          </tr></thead>
+          <tbody className="divide-y divide-slate-50">
+            {stats.types.map((t:any, i:number) => (
+              <tr key={i} className="hover:bg-slate-50 text-[11px] font-medium text-slate-700">
+                <td className="p-3">{t.name}</td><td className="p-3">{t.count}</td><td className="p-3">{formatComma(t.interactions)}</td><td className="p-3 text-indigo-600 font-bold">{formatComma(Math.round(t.avgInt))}</td>
+                <td className="p-3"><div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-indigo-400" style={{width:`${t.vPct}%`}}/></div> {t.vPct.toFixed(0)}%</td>
+                <td className="p-3"><div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-emerald-400" style={{width:`${t.iPct}%`}}/></div> {t.iPct.toFixed(0)}%</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="flex flex-wrap gap-4">
+        <Top3Ranking title="互动量" records={stats.topInt} dataKey="interactions" icon={<Zap size={14} className="text-indigo-500"/>} label="互动" />
+        <Top3Ranking title="点赞量" records={stats.topLikes} dataKey="likes" icon={<ThumbsUp size={14} className="text-rose-500"/>} label="点赞" />
+        <Top3Ranking title="评论量" records={stats.topComments} dataKey="comments" icon={<MessageCircle size={14} className="text-violet-500"/>} label="评论" />
+        <Top3Ranking title="收藏量" records={stats.topCollects} dataKey="collects" icon={<Star size={14} className="text-amber-500"/>} label="收藏" />
+      </div>
+    </div>
+  );
 
   return (
-    <div className="h-full bg-white rounded-2xl border border-slate-100 p-4 flex flex-col overflow-hidden relative">
-      {/* 5大板块 TabBar */}
-      <div className="flex items-center justify-between mb-4 flex-shrink-0 border-b border-slate-100 pb-2">
-        <div className="flex gap-1 bg-slate-50 p-1 rounded-xl border border-slate-100">
+    <div className="h-full bg-white rounded-2xl border border-slate-100 p-4 flex flex-col overflow-hidden">
+      {/* 头部布局修改：突出显示当前品牌，按钮左对齐 */}
+      <div className="flex items-center justify-between mb-4 flex-shrink-0 border-b border-slate-100 pb-3">
+        <div className="flex items-center gap-3">
+          <div className="w-1.5 h-6 bg-indigo-500 rounded-full"></div>
+          <span className="text-lg font-black text-slate-800 tracking-wide truncate max-w-[200px]">{displayTitle}</span>
+        </div>
+        <div className="flex gap-1.5 bg-slate-50 p-1 rounded-xl border border-slate-100">
           <TabBtn active={activeTab==='overview'} onClick={()=>setActiveTab('overview')} icon={<LayoutDashboard size={14}/>} label="数据总览" />
           <TabBtn active={activeTab==='content'} onClick={()=>setActiveTab('content')} icon={<Clapperboard size={14}/>} label="内容分析" />
           <TabBtn active={activeTab==='creators'} onClick={()=>setActiveTab('creators')} icon={<Users size={14}/>} label="达人策略" />
           <TabBtn active={activeTab==='cost'} onClick={()=>setActiveTab('cost')} icon={<DollarSign size={14}/>} label="费用分析" />
           <TabBtn active={activeTab==='details'} onClick={()=>setActiveTab('details')} icon={<List size={14}/>} label="笔记明细" />
         </div>
-        {/* 单个分析模式下左上角/顶端放大显示所选品牌 */}
-        {analysisMode === 'single' && (
-          <div className="flex items-center gap-1.5 bg-indigo-50/70 border border-indigo-100 px-3 py-1.5 rounded-xl">
-            <span className="text-[10px] uppercase font-extrabold text-indigo-500 tracking-wider">当前聚焦品牌</span>
-            <div className="h-2.5 w-px bg-indigo-200"></div>
-            <span className="text-xs font-black text-indigo-700">{activeBrands[0] || '默认全局'}</span>
-          </div>
-        )}
       </div>
 
-      <div className="flex-1 overflow-y-auto custom-scroll pr-1 space-y-6 pb-10">
+      <div className="flex-1 overflow-y-auto custom-scroll pr-2 space-y-6 pb-10">
         
         {/* ================= Tab 1: 数据总览 ================= */}
         {activeTab === 'overview' && (
           <div className="space-y-6 animate-fade-in">
-            <div className="grid grid-cols-4 gap-3">
-              <StatCard icon={<FileText/>} title="笔记总数" value={stats.notes} color="text-blue-500" bg="bg-blue-50" />
-              <StatCard icon={<Zap/>} title="总互动量" value={formatNum(stats.interactions)} color="text-indigo-500" bg="bg-indigo-50" />
-              <StatCard icon={<DollarSign/>} title="总预估花费" value={`¥${formatNum(stats.cost)}`} color="text-emerald-500" bg="bg-emerald-50" />
-              <StatCard icon={<Users/>} title="单互动成本(CPE)" value={`¥${stats.cpe}`} color="text-amber-500" bg="bg-amber-50" />
-            </div>
-
             {analysisMode === 'single' ? (
-              // =================【单个分析模式】折线图集群 =================
-              <div className="space-y-6">
-                {/* 1. 互动量推移图 (单轴) */}
-                <ChartBox title="互动推移趋势" iconText={`${activeBrands[0]} 篇均互动量: ${stats.avgInteractions}次`}>
-                  <LineChart data={stats.trends}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="timeLabel" axisLine={false} tickLine={false} tick={{ fontSize: 11 }} />
-                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11 }} tickFormatter={formatNum} />
-                    <Tooltip formatter={(value: number) => formatComma(value)} contentStyle={{ borderRadius: '8px', border: 'none' }} />
-                    <ReferenceLine y={stats.avgInteractions} stroke="#FF7300" strokeDasharray="4 4" label={{ value: '平均值', fill: '#FF7300', fontSize: 10, position: 'top' }} />
-                    <Line type="monotone" name="总互动量" dataKey="interactions" stroke="#6366F1" strokeWidth={3} dot={{ r: 3 }} />
-                  </LineChart>
-                </ChartBox>
-
-                {/* 2. 点赞量双轴图 (占比图) */}
-                <ChartBox title="点赞推移与互动占比 (双轴)" iconText={`${activeBrands[0]} 篇均点赞: ${stats.avgLikes}次`}>
-                  <LineChart data={stats.trends}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="timeLabel" axisLine={false} tickLine={false} tick={{ fontSize: 11 }} />
-                    <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#6366F1' }} tickFormatter={formatNum} />
-                    <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#EC4899' }} unit="%" />
-                    <Tooltip contentStyle={{ borderRadius: '8px', border: 'none' }} />
-                    <ReferenceLine yAxisId="left" y={stats.avgLikes} stroke="#3B82F6" strokeDasharray="4 4" label={{ value: '均值', fill: '#3B82F6', fontSize: 10 }} />
-                    <Line yAxisId="left" type="monotone" name="点赞量" dataKey="likes" stroke="#6366F1" strokeWidth={3} dot={{ r: 3 }} />
-                    <Line yAxisId="right" type="monotone" name="点赞/互动比" dataKey="likesRatio" stroke="#EC4899" strokeWidth={2} strokeDasharray="3 3" dot={false} />
-                  </LineChart>
-                </ChartBox>
-
-                {/* 3. 评论量双轴图 */}
-                <ChartBox title="评论推移与互动占比 (双轴)" iconText={`${activeBrands[0]} 篇均评论: ${stats.avgComments}次`}>
-                  <LineChart data={stats.trends}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="timeLabel" axisLine={false} tickLine={false} tick={{ fontSize: 11 }} />
-                    <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#10B981' }} tickFormatter={formatNum} />
-                    <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#EC4899' }} unit="%" />
-                    <Tooltip contentStyle={{ borderRadius: '8px', border: 'none' }} />
-                    <ReferenceLine yAxisId="left" y={stats.avgComments} stroke="#10B981" strokeDasharray="4 4" label={{ value: '均值', fill: '#10B981', fontSize: 10 }} />
-                    <Line yAxisId="left" type="monotone" name="评论量" dataKey="comments" stroke="#10B981" strokeWidth={3} dot={{ r: 3 }} />
-                    <Line yAxisId="right" type="monotone" name="评论/互动比" dataKey="commentsRatio" stroke="#EC4899" strokeWidth={2} strokeDasharray="3 3" dot={false} />
-                  </LineChart>
-                </ChartBox>
-
-                {/* 4. 收藏量双轴图 */}
-                <ChartBox title="收藏推移与互动占比 (双轴)" iconText={`${activeBrands[0]} 篇均收藏: ${stats.avgCollects}次`}>
-                  <LineChart data={stats.trends}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="timeLabel" axisLine={false} tickLine={false} tick={{ fontSize: 11 }} />
-                    <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#F59E0B' }} tickFormatter={formatNum} />
-                    <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#EC4899' }} unit="%" />
-                    <Tooltip contentStyle={{ borderRadius: '8px', border: 'none' }} />
-                    <ReferenceLine yAxisId="left" y={stats.avgCollects} stroke="#F59E0B" strokeDasharray="4 4" label={{ value: '均值', fill: '#F59E0B', fontSize: 10 }} />
-                    <Line yAxisId="left" type="monotone" name="收藏量" dataKey="collects" stroke="#F59E0B" strokeWidth={3} dot={{ r: 3 }} />
-                    <Line yAxisId="right" type="monotone" name="收藏/互动比" dataKey="collectsRatio" stroke="#EC4899" strokeWidth={2} strokeDasharray="3 3" dot={false} />
-                  </LineChart>
-                </ChartBox>
-              </div>
+              <>
+                <div className="grid grid-cols-4 gap-3">
+                  <StatCard title="笔记总数" value={overallStats.notes} color="text-blue-500" bg="bg-blue-50" />
+                  <StatCard title="总互动量" value={formatNum(overallStats.interactions)} color="text-indigo-500" bg="bg-indigo-50" />
+                  <StatCard title="总花费" value={`¥${formatNum(overallStats.cost)}`} color="text-emerald-500" bg="bg-emerald-50" />
+                  <StatCard title="CPE" value={`¥${overallStats.cpe.toFixed(2)}`} color="text-amber-500" bg="bg-amber-50" />
+                </div>
+                {/* 需求1：拆分四大指标双轴图，均附带虚线与侧边均值 */}
+                <SingleMetricChart title="互动" dataKey="interactions" rateKey={null} color="#6366F1" avg={overallStats.avg.interactions} />
+                <SingleMetricChart title="点赞" dataKey="likes" rateKey="likeRate" color="#F43F5E" avg={overallStats.avg.likes} />
+                <SingleMetricChart title="评论" dataKey="comments" rateKey="commentRate" color="#8B5CF6" avg={overallStats.avg.comments} />
+                <SingleMetricChart title="收藏" dataKey="collects" rateKey="collectRate" color="#F59E0B" avg={overallStats.avg.collects} />
+              </>
             ) : (
-              // =================【竞品对比模式】折线图集群 =================
-              <div className="space-y-6">
-                <ChartBox title="各竞品品牌互动推移对比 (多线交织)" iconText="对比多竞品的绝对影响力走势">
-                  <LineChart data={stats.trends}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="timeLabel" axisLine={false} tickLine={false} tick={{ fontSize: 11 }} />
-                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11 }} tickFormatter={formatNum} />
-                    <Tooltip contentStyle={{ borderRadius: '8px', border: 'none' }} />
-                    <Legend />
-                    {selectedBrands.map((brand, idx) => {
-                      const colors = ["#6366F1", "#10B981", "#F59E0B", "#EC4899", "#06B6D4"];
-                      return (
-                        <Line 
-                          key={brand} 
-                          type="monotone" 
-                          name={`${brand}互动量`} 
-                          dataKey={`int_${brand}`} 
-                          stroke={colors[idx % colors.length]} 
-                          strokeWidth={2.5} 
-                          dot={{ r: 2.5 }} 
-                        />
-                      );
-                    })}
-                  </LineChart>
-                </ChartBox>
-              </div>
+              <>
+                {/* 竞品对比模式图表 */}
+                <CompareMetricChart title="互动量" metricSuffix="int" />
+                <CompareMetricChart title="点赞量" metricSuffix="likes" />
+                <CompareMetricChart title="评论量" metricSuffix="comments" />
+                <CompareMetricChart title="收藏量" metricSuffix="collects" />
+              </>
             )}
           </div>
         )}
@@ -388,94 +264,9 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
         {activeTab === 'content' && (
           <div className="space-y-6 animate-fade-in">
             {analysisMode === 'single' ? (
-              // =================【单个分析模式】内容明细 =================
-              <div className="space-y-6">
-                <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
-                  <h3 className="text-xs font-extrabold text-slate-700 mb-3 flex items-center gap-1.5">📁 ${activeBrands[0]} 赛道明细明细表</h3>
-                  <div className="bg-white rounded-xl border border-slate-100 overflow-hidden shadow-sm">
-                    <table className="w-full text-left border-collapse text-[11px]">
-                      <thead className="bg-slate-50/80 font-black text-slate-500 border-b border-slate-100">
-                        <tr>
-                          <th className="py-2.5 px-3">赛道名称</th>
-                          <th className="py-2.5 px-3">合作篇数</th>
-                          <th className="py-2.5 px-3 text-indigo-600">总互动量</th>
-                          <th className="py-2.5 px-3 text-indigo-600">篇均互动量</th>
-                          <th className="py-2.5 px-3">视频占比</th>
-                          <th className="py-2.5 px-3">图文占比</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-50 font-bold text-slate-700">
-                        {(brandStatsMap.get(activeBrands[0])?.trackDetails || []).map((t: any, i: number) => (
-                          <tr key={i} className="hover:bg-slate-50/50 transition-colors">
-                            <td className="py-2.5 px-3 text-slate-900">{t.name}</td>
-                            <td className="py-2.5 px-3">{t.count} 篇</td>
-                            <td className="py-2.5 px-3 text-indigo-600 font-extrabold">{formatComma(t.interactions)}</td>
-                            <td className="py-2.5 px-3 text-indigo-600 font-extrabold">{formatComma(t.avgInt)}</td>
-                            <td className="py-2.5 px-3 text-indigo-500">{t.videoPct}%</td>
-                            <td className="py-2.5 px-3 text-emerald-500">{t.imagePct}%</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                {/* 4重 Top3 排行榜 */}
-                <div className="grid grid-cols-2 gap-4">
-                  {renderTop3List(brandStatsMap.get(activeBrands[0])?.topInteractions || [], "总互动量", "interactions", "总互动")}
-                  {renderTop3List(brandStatsMap.get(activeBrands[0])?.topLikes || [], "点赞量", "likes", "点赞")}
-                  {renderTop3List(brandStatsMap.get(activeBrands[0])?.topComments || [], "评论量", "comments", "评论")}
-                  {renderTop3List(brandStatsMap.get(activeBrands[0])?.topCollects || [], "收藏量", "collects", "收藏")}
-                </div>
-              </div>
+              <ContentDetailBlock stats={overallStats} bName="整体" />
             ) : (
-              // =================【竞品对比模式】多表级联 =================
-              <div className="space-y-8">
-                {selectedBrands.map(brand => {
-                  const bStat = brandStatsMap.get(brand);
-                  if (!bStat) return null;
-                  return (
-                    <div key={brand} className="bg-slate-50 border border-slate-200/60 p-4 rounded-2xl space-y-4">
-                      <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
-                        <Sparkles size={16} className="text-indigo-500" />
-                        <h3 className="text-sm font-black text-slate-800">{brand} 专属内容洞察</h3>
-                      </div>
-                      
-                      <div className="bg-white rounded-xl border border-slate-100 overflow-hidden shadow-sm">
-                        <table className="w-full text-left border-collapse text-[10px]">
-                          <thead className="bg-slate-100/50 font-black text-slate-500 border-b border-slate-100">
-                            <tr>
-                              <th className="py-2 px-3">赛道名称</th>
-                              <th className="py-2 px-3">合作篇数</th>
-                              <th className="py-2 px-3 text-indigo-600">总互动量</th>
-                              <th className="py-2 px-3 text-indigo-600">篇均互动量</th>
-                              <th className="py-2 px-3">视频占比</th>
-                              <th className="py-2 px-3">图文占比</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-50 font-bold text-slate-700">
-                            {bStat.trackDetails.map((t: any, i: number) => (
-                              <tr key={i} className="hover:bg-slate-50/50 transition-colors">
-                                <td className="py-2 px-3 text-slate-900">{t.name}</td>
-                                <td className="py-2 px-3">{t.count} 篇</td>
-                                <td className="py-2 px-3 text-indigo-600 font-extrabold">{formatComma(t.interactions)}</td>
-                                <td className="py-2 px-3 text-indigo-600 font-extrabold">{formatComma(t.avgInt)}</td>
-                                <td className="py-2 px-3 text-indigo-500">{t.videoPct}%</td>
-                                <td className="py-2 px-3 text-emerald-500">{t.imagePct}%</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-3">
-                        {renderTop3List(bStat.topInteractions, `${brand} 互动榜`, "interactions", "总互动")}
-                        {renderTop3List(bStat.topLikes, `${brand} 点赞榜`, "likes", "点赞")}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              activeBrands.map(b => <ContentDetailBlock key={b} stats={compareStats[b]} bName={b} />)
             )}
           </div>
         )}
@@ -484,83 +275,50 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
         {activeTab === 'creators' && (
           <div className="space-y-6 animate-fade-in">
             {analysisMode === 'single' ? (
-              // =================【单个分析模式】达人属性左移 =================
-              <div className="space-y-6">
-                <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
-                  <h3 className="text-xs font-bold text-slate-700 mb-4 flex items-center gap-1.5">👥 达人属性层级分布</h3>
-                  <div className="grid gap-4">
-                    {stats.creatorAttrs.map((attr, i) => (
-                      <div key={i} className="bg-white p-4 rounded-xl border border-slate-200/60 shadow-sm flex flex-col gap-2 hover:shadow transition-all">
-                        {/* 达人数占比、费用占比挪位至左侧名字旁边 */}
-                        <div className="flex justify-between items-center pb-2 border-b border-slate-100">
-                          <div className="flex items-center gap-3">
-                            <span className="text-sm font-black text-indigo-700">{attr.name}</span>
-                            <div className="flex items-center gap-1.5 text-[10px] font-bold">
-                              <span className="bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded">篇数占 {attr.notePct}%</span>
-                              <span className="bg-emerald-50 text-emerald-600 px-1.5 py-0.5 rounded">费用占 {attr.costPct}%</span>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <span className="text-xs font-black text-slate-800">{attr.uCount} 位达人</span>
-                          </div>
-                        </div>
-                        
-                        <div className="grid grid-cols-3 gap-2 text-center text-[11px] font-bold">
-                          <div className="bg-slate-50 p-2 rounded">
-                            <p className="text-[10px] text-slate-400">合作篇数</p>
-                            <p className="text-sm font-extrabold text-slate-700 mt-0.5">{attr.count} 篇</p>
-                          </div>
-                          <div className="bg-slate-50 p-2 rounded">
-                            <p className="text-[10px] text-slate-400">平均费用指标 / 达人</p>
-                            <p className="text-sm font-extrabold text-emerald-600 mt-0.5">¥{formatComma(attr.avgCost)}</p>
-                          </div>
-                          <div className="bg-slate-50 p-2 rounded">
-                            <p className="text-[10px] text-slate-400">总投放费用</p>
-                            <p className="text-sm font-extrabold text-slate-700 mt-0.5">¥{formatNum(attr.cost)}</p>
-                          </div>
-                        </div>
+              <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
+                <h3 className="text-xs font-bold text-slate-700 mb-4 flex items-center gap-1.5">👥 达人结构矩阵</h3>
+                <div className="grid gap-3">
+                  {overallStats.creatorAttrs.map((attr, i) => (
+                    <div key={i} className="flex items-center justify-between bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+                      <div className="w-[20%]"><span className="text-sm font-black text-indigo-700">{attr.name}</span></div>
+                      <div className="flex-1 flex gap-6">
+                        {/* 修改：占比与数量左移 */}
+                        <div><p className="text-[10px] text-slate-400 mb-0.5">人数占比</p><p className="text-sm font-black text-slate-700">{attr.count}人 <span className="text-[10px] font-normal">({Math.round(attr.count/overallStats.notes*100)}%)</span></p></div>
+                        <div><p className="text-[10px] text-slate-400 mb-0.5">费用占比</p><p className="text-sm font-black text-emerald-600">¥{formatNum(attr.cost)} <span className="text-[10px] font-normal">({Math.round(attr.cost/overallStats.cost*100)}%)</span></p></div>
+                        {/* 修改：新增平均费用指标 */}
+                        <div><p className="text-[10px] text-slate-400 mb-0.5">该层级平均合作费</p><p className="text-sm font-black text-amber-600">¥{formatComma(Math.round(attr.avgCost))}/人</p></div>
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  ))}
                 </div>
+                <div className="mt-6"><SingleMetricChart title="合作达人数" dataKey="creators" color="#8B5CF6" avg={overallStats.avg.interactions/*这里仅借用组件，avg略过*/} /></div>
               </div>
             ) : (
-              // =================【竞品对比模式】汇总对比长表 =================
               <div className="space-y-6">
-                <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
-                  <h3 className="text-xs font-extrabold text-slate-700 mb-3 flex items-center gap-1.5">📊 竞品达人采购策略一览表</h3>
-                  <div className="bg-white rounded-xl border border-slate-100 overflow-hidden shadow-sm">
-                    <table className="w-full text-left border-collapse text-[10px]">
-                      <thead className="bg-slate-100 font-black text-slate-500 border-b border-slate-100">
-                        <tr>
-                          <th className="py-2.5 px-3">品牌名</th>
-                          <th className="py-2.5 px-3">达人总数 (去重)</th>
-                          <th className="py-2.5 px-3 text-indigo-600">总投放费用</th>
-                          <th className="py-2.5 px-3">均费用/达人</th>
-                          <th className="py-2.5 px-3">头部达人/腰部/初级</th>
+                <CompareMetricChart title="合作达人数" metricSuffix="creators" />
+                
+                {/* 需求5：达人总数对比表格 */}
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                  <table className="w-full text-left">
+                    <thead className="bg-slate-50 border-b border-slate-100">
+                      <tr><th className="p-3 text-xs font-bold text-slate-500">对比指标</th>{activeBrands.map(b=><th key={b} className="p-3 text-xs font-bold text-indigo-600">{b}</th>)}</tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50 text-[11px] text-slate-700">
+                      <tr><td className="p-3 font-bold">达人总数 (人)</td>{activeBrands.map(b=><td key={b} className="p-3 font-black">{compareStats[b].influencerCount}</td>)}</tr>
+                      <tr><td className="p-3 font-bold">预估总花费 (¥)</td>{activeBrands.map(b=><td key={b} className="p-3">{formatComma(compareStats[b].cost)}</td>)}</tr>
+                      <tr className="bg-slate-50"><td colSpan={activeBrands.length+1} className="p-2 font-bold text-slate-400">达人属性结构详情 (人数 / 平均费用)</td></tr>
+                      {/* 取所有出现过的达人属性 */}
+                      {Array.from(new Set(activeBrands.flatMap(b => compareStats[b].creatorAttrs.map(a=>a.name)))).map((attrName:any, i) => (
+                        <tr key={i}>
+                          <td className="p-3">{attrName}</td>
+                          {activeBrands.map(b => {
+                            const match = compareStats[b].creatorAttrs.find(a=>a.name===attrName);
+                            return <td key={b} className="p-3">{match ? <span className="font-bold">{match.count}人 <span className="text-emerald-600 font-normal">/ ¥{formatComma(Math.round(match.avgCost))}</span></span> : '-'}</td>
+                          })}
                         </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-50 font-bold text-slate-700">
-                        {selectedBrands.map(brand => {
-                          const bStat = brandStatsMap.get(brand);
-                          if (!bStat) return null;
-                          return (
-                            <tr key={brand} className="hover:bg-slate-50/50 transition-colors">
-                              <td className="py-2.5 px-3 text-slate-900 font-black">{brand}</td>
-                              <td className="py-2.5 px-3">{bStat.creatorsCount} 人</td>
-                              <td className="py-2.5 px-3 text-emerald-600">¥{formatComma(bStat.totalCost)}</td>
-                              <td className="py-2.5 px-3">¥{formatComma(bStat.avgCost)}</td>
-                              <td className="py-2.5 px-3 text-slate-500">
-                                {bStat.records.filter((r:any)=>r.influencerType==='头部达人').length}篇/
-                                {bStat.records.filter((r:any)=>r.influencerType==='腰部达人').length}篇/
-                                {bStat.records.filter((r:any)=>r.influencerType==='初级达人').length}篇
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             )}
@@ -570,56 +328,47 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
         {/* ================= Tab 4: 费用分析 ================= */}
         {activeTab === 'cost' && (
           <div className="space-y-6 animate-fade-in">
-            <div className="flex gap-4">
-              <div className="flex-1 bg-white border border-amber-100 shadow-sm rounded-xl p-5 relative">
-                <p className="text-xs text-slate-500 mb-1">总预估投放</p>
-                <p className="text-3xl font-black text-slate-800">¥{formatComma(stats.cost)}</p>
-                <p className="text-[11px] text-slate-400 mt-2">{stats.notes} 篇笔记</p>
-              </div>
-              <div className="flex-1 bg-white border border-indigo-100 shadow-sm rounded-xl p-5 relative">
-                <p className="text-xs text-slate-500 mb-1">单次互动成本 (CPE)</p>
-                <p className="text-3xl font-black text-slate-800">¥{stats.cpe}</p>
-                <p className="text-[11px] text-slate-400 mt-2">平均值</p>
-              </div>
-            </div>
-
-            <ChartBox title="预估投放金额推移趋势" iconText="添加 CPE 行业警示均值参考线">
-              <LineChart data={stats.trends}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="timeLabel" axisLine={false} tickLine={false} tick={{ fontSize: 11 }} />
-                <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#10B981' }} tickFormatter={(v)=>'¥'+formatNum(v)} />
-                <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#F59E0B' }} />
-                <Tooltip contentStyle={{ borderRadius: '8px', border: 'none' }} />
-                {/* 增加平均CPE虚线参考线 */}
-                <ReferenceLine yAxisId="right" y={Number(stats.cpe)} stroke="#EF4444" strokeDasharray="5 5" label={{ value: `平均CPE: ¥${stats.cpe}`, fill: '#EF4444', fontSize: 10 }} />
-                <Line yAxisId="left" type="monotone" name="预算花费" dataKey="cost" stroke="#10B981" strokeWidth={3} dot={{ r: 3 }} />
-                <Line yAxisId="right" type="monotone" name="单次CPE" dataKey="cpe" stroke="#F59E0B" strokeWidth={2.5} dot={{ r: 2 }} />
-              </LineChart>
-            </ChartBox>
+            {analysisMode === 'single' ? (
+              <>
+                <SingleMetricChart title="预估投放费用" dataKey="cost" color="#10B981" avg={overallStats.cost/(overallStats.trends.length||1)} />
+                {/* 需求4：包含平均 CPE 虚线的 CPE 推移图 */}
+                <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 mt-6">
+                  <h3 className="text-xs font-bold text-slate-700 mb-3">单次互动成本 (CPE) 推移</h3>
+                  <div className="h-56">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={overallStats.trends}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                        <XAxis dataKey="timeLabel" axisLine={false} tickLine={false} tick={{ fontSize: 11 }} />
+                        <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#F59E0B' }} width={30} />
+                        <Tooltip formatter={(v:number)=>'¥'+v.toFixed(2)} contentStyle={{ borderRadius: '8px', border: 'none' }} />
+                        <ReferenceLine y={overallStats.avg.cpe} stroke="#F59E0B" strokeDasharray="3 3" label={{ position: 'top', value: `均值 ¥${overallStats.avg.cpe.toFixed(2)}`, fill: '#F59E0B', fontSize: 10 }} />
+                        <Line type="monotone" name="CPE" dataKey="cpe" stroke="#F59E0B" strokeWidth={3} dot={{ r: 3 }} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <CompareMetricChart title="预估总花费" metricSuffix="cost" />
+                <CompareMetricChart title="单次互动成本 (CPE)" metricSuffix="cpe" />
+              </>
+            )}
           </div>
         )}
 
         {/* ================= Tab 5: 笔记明细 ================= */}
         {activeTab === 'details' && (
-          <div className="h-[520px] animate-fade-in">
+          <div className="animate-fade-in space-y-6">
             {analysisMode === 'single' ? (
-              <NotesTable records={filteredRecords} />
+               <div className="h-[600px]"><NotesTable records={overallStats.records} /></div>
             ) : (
-              // 对比模式下，各品牌单独拆表独立呈现
-              <div className="space-y-6 h-full overflow-y-auto pr-1">
-                {selectedBrands.map(brand => {
-                  const bStat = brandStatsMap.get(brand);
-                  if (!bStat) return null;
-                  return (
-                    <div key={brand} className="bg-white border border-slate-200 p-3 rounded-2xl h-[450px] flex flex-col">
-                      <p className="text-xs font-black text-slate-800 mb-2 flex items-center gap-1.5">📋 {brand} 明细流水表</p>
-                      <div className="flex-1 overflow-hidden">
-                        <NotesTable records={bStat.records} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+               activeBrands.map(b => (
+                 <div key={b} className="space-y-2">
+                   <h3 className="text-sm font-black text-slate-800 border-l-4 border-indigo-500 pl-2">{b} 明细数据</h3>
+                   <div className="h-[400px]"><NotesTable records={compareStats[b].records} /></div>
+                 </div>
+               ))
             )}
           </div>
         )}
@@ -629,5 +378,4 @@ export const Dashboard: React.FC<Props> = ({ data, selectedCommercial, selectedB
 };
 
 function TabBtn({ active, onClick, icon, label }: any) { return (<button onClick={onClick} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${active ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>{icon} {label}</button>); }
-function StatCard({ icon, title, value, color, bg }: any) { return (<div className={`${bg} rounded-xl p-3 border border-slate-100/50`}><div className={`w-7 h-7 rounded-lg bg-white flex items-center justify-center shadow-sm mb-2 ${color}`}>{React.cloneElement(icon, { size: 14 })}</div><p className="text-[11px] text-slate-500 mb-0.5">{title}</p><p className={`text-lg font-black ${color.replace('text-', 'text-').replace('500', '700')}`}>{value}</p></div>); }
-function ChartBox({ title, iconText, children }: { title: string, iconText?: string, children: React.ReactNode }) { return (<div className="bg-slate-50 rounded-xl p-4 border border-slate-100"><div className="flex justify-between items-center mb-4"><h3 className="text-xs font-bold text-slate-700">{title}</h3>{iconText && <span className="text-[10px] font-black text-slate-400 bg-slate-200/50 px-2 py-0.5 rounded-full">{iconText}</span>}</div><div className="h-56"><ResponsiveContainer width="100%" height="100%">{children}</ResponsiveContainer></div></div>); }
+function StatCard({ title, value, color, bg }: any) { return (<div className={`${bg} rounded-xl p-3 border border-slate-100/50`}><p className="text-[11px] text-slate-500 mb-0.5">{title}</p><p className={`text-lg font-black ${color.replace('text-', 'text-').replace('500', '700')}`}>{value}</p></div>); }
