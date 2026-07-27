@@ -1,22 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { ParsedData } from './types';
 import { getEmptyData } from './utils/parseData';
-import { Activity, Filter, ChevronDown, Check, Columns, UserCheck } from 'lucide-react';
+import { Activity, Filter, ChevronDown, Check, GitCompare, User } from 'lucide-react';
 import { UploadBar } from './components/UploadBar';
 import { Dashboard } from './components/Dashboard';
 import { AIPanel } from './components/AIPanel';
 
-// 优雅的多选下拉组件
-function MultiSelect({ options, selected, onChange, placeholder, isSingle = false }: any) {
+function MultiSelect({ options, selected, onChange, placeholder, isCompareMode }: any) {
   const [isOpen, setIsOpen] = useState(false);
   const isAll = selected.length === 0;
 
   const toggleOption = (opt: string) => {
-    if (isSingle) {
-      onChange([opt]);
-      setIsOpen(false);
-      return;
-    }
     if (selected.includes(opt)) onChange(selected.filter((o: string) => o !== opt));
     else onChange([...selected, opt]);
   };
@@ -29,15 +23,15 @@ function MultiSelect({ options, selected, onChange, placeholder, isSingle = fals
         onClick={() => setIsOpen(!isOpen)} 
         className="relative z-50 flex items-center justify-between gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-lg cursor-pointer hover:border-indigo-300 transition-colors min-w-[120px]"
       >
-        <span className="text-xs font-bold text-slate-700 truncate max-w-[100px]">
-          {isAll ? placeholder : `${selected[0]} ${selected.length > 1 ? `(+${selected.length - 1})` : ''}`}
+        <span className="text-xs font-bold text-slate-700 truncate max-w-[120px]">
+          {isCompareMode && isAll ? '请勾选对比品牌' : isAll ? placeholder : `${selected[0]} ${selected.length > 1 ? `(+${selected.length - 1})` : ''}`}
         </span>
         <ChevronDown size={14} className={`text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </div>
 
       {isOpen && (
         <div className="absolute z-50 top-full right-0 mt-1 w-48 bg-white border border-slate-100 rounded-xl shadow-xl py-1 max-h-60 overflow-y-auto custom-scroll">
-          {!isSingle && (
+          {!isCompareMode && (
             <>
               <div 
                 onClick={() => { onChange([]); setIsOpen(false); }}
@@ -72,18 +66,16 @@ export default function App() {
   const [selectedCommercial, setSelectedCommercial] = useState<string>('全部');
   const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
   const [selectedMonths, setSelectedMonths] = useState<string[]>([]);
-  // 新增切换：【单个分析】/【竞品对比】
+  
+  // 新增：双模切换状态
   const [analysisMode, setAnalysisMode] = useState<'single' | 'compare'>('single');
 
-  // 当切换到单品牌分析，如果之前勾选了多个品牌，默认只保留第一个
-  useEffect(() => {
-    if (analysisMode === 'single' && selectedBrands.length > 1) {
-      setSelectedBrands([selectedBrands[0]]);
-    } else if (analysisMode === 'single' && selectedBrands.length === 0 && data.brands.length > 0) {
-      // 默认选中第一个品牌
-      setSelectedBrands([data.brands[0]]);
+  const handleModeChange = (mode: 'single' | 'compare') => {
+    setAnalysisMode(mode);
+    if (mode === 'compare' && selectedBrands.length === 0 && data.brands.length > 0) {
+      setSelectedBrands(data.brands.slice(0, 2)); // 默认选两个对比
     }
-  }, [analysisMode, data.brands]);
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col" style={{ height: '100vh', overflow: 'hidden' }}>
@@ -100,46 +92,24 @@ export default function App() {
 
         {data.totalNotes > 0 && (
           <div className="flex items-center gap-4">
-            {/* 核心切换开关：单个分析/竞品对比 */}
-            <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
-              <button
-                onClick={() => setAnalysisMode('single')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black transition-all ${
-                  analysisMode === 'single' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                <UserCheck size={14} /> 单个分析
+            {/* 新增：模式切换器 */}
+            <div className="flex items-center bg-slate-100 p-1 rounded-lg shadow-inner border border-slate-200">
+              <button onClick={() => handleModeChange('single')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${analysisMode === 'single' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}>
+                <User size={14} /> 单个分析
               </button>
-              <button
-                onClick={() => setAnalysisMode('compare')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black transition-all ${
-                  analysisMode === 'compare' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                <Columns size={14} /> 竞品对比
+              <button onClick={() => handleModeChange('compare')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${analysisMode === 'compare' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}>
+                <GitCompare size={14} /> 竞品对比
               </button>
             </div>
 
             <div className="flex items-center gap-2 bg-slate-100 border border-slate-200 rounded-xl px-2 py-1.5 shadow-inner">
               <Filter size={14} className="text-slate-400 ml-1" />
-              <select 
-                value={selectedCommercial} 
-                onChange={(e) => setSelectedCommercial(e.target.value)} 
-                className="bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold text-slate-700 outline-none cursor-pointer hover:border-indigo-300"
-              >
-                <option value="全部">全部笔记性质</option>
+              <select value={selectedCommercial} onChange={(e) => setSelectedCommercial(e.target.value)} className="bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold text-slate-700 outline-none cursor-pointer hover:border-indigo-300">
+                <option value="全部">全部性质</option>
                 <option value="是">仅商业笔记</option>
                 <option value="否">仅非商业笔记</option>
               </select>
-              
-              {/* 单个分析模式下品牌是单选，竞品对比模式下是勾选（多选） */}
-              <MultiSelect 
-                options={data.brands} 
-                selected={selectedBrands} 
-                onChange={setSelectedBrands} 
-                placeholder={analysisMode === 'single' ? "选择品牌" : "勾选对比品牌"} 
-                isSingle={analysisMode === 'single'} 
-              />
+              <MultiSelect options={data.brands} selected={selectedBrands} onChange={setSelectedBrands} placeholder="全部品牌横评" isCompareMode={analysisMode === 'compare'} />
               <MultiSelect options={data.months} selected={selectedMonths} onChange={setSelectedMonths} placeholder="全部时间段" />
             </div>
           </div>
@@ -151,23 +121,12 @@ export default function App() {
       </div>
 
       <div className="flex-1 flex gap-5 px-6 pb-5 overflow-hidden min-h-0">
-        <div className="flex flex-col h-full shadow-sm" style={{ width: '58%' }}>
-          <Dashboard 
-            data={data} 
-            selectedCommercial={selectedCommercial} 
-            selectedBrands={selectedBrands} 
-            selectedMonths={selectedMonths}
-            analysisMode={analysisMode}
-          />
+        <div className="flex flex-col h-full shadow-sm" style={{ width: '55%' }}>
+          {/* 将 mode 传入看板 */}
+          <Dashboard data={data} selectedCommercial={selectedCommercial} selectedBrands={selectedBrands} selectedMonths={selectedMonths} analysisMode={analysisMode} />
         </div>
         <div className="flex flex-col h-full shadow-sm" style={{ flex: 1 }}>
-          <AIPanel 
-            data={data} 
-            selectedCommercial={selectedCommercial} 
-            selectedBrands={selectedBrands} 
-            selectedMonths={selectedMonths}
-            analysisMode={analysisMode}
-          />
+          <AIPanel data={data} selectedCommercial={selectedCommercial} selectedBrands={selectedBrands} selectedMonths={selectedMonths} />
         </div>
       </div>
     </div>
