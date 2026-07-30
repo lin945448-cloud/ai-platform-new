@@ -97,7 +97,7 @@ const tempoMayJune = `笔记发布时间	笔记标题	笔记形式	报备合作�
 2026-05-28 20:56:49	音乐节｜追星党全靠得宝冰感小凉皮续命	图文	Tempo得宝	是	是	身体护理	https://www.xiaohongshu.com/discovery/item/6a1834640000000037035cb5	103	52	23	28	6			惠探啥	是	945571372	3504	银冠薯	素人	 	https://www.xiaohongshu.com/user/profile/5ab7ada94eacab6beb41a962	http://app.qian-gua.com/#/blogger/detail/6810859/7048a5	154392199@qq.com	人文font风光展示,美食探店,去处,穿搭,景点攻略	1500
 2026-05-20 21:33:39	杭州520｜得宝把法式玫瑰庄园搬来了！	图文	Tempo得宝	是	是	个人护理其他	https://www.xiaohongshu.com/discovery/item/6a0db102000000000702a432	100	88	2	10	4			杭州圈子	是	HZquanzi	13386	金冠薯	初级达人	浙江 杭州市	https://www.xiaohongshu.com/user/profile/5b7133e9f35c180001e7e2a0	http://app.qian-gua.com/#/blogger/detail/201221/a232d4	hzquanzi@qq.com	穿搭,美食测评,美食探店,运动,景点攻略	1950
 2026-05-26 19:19:16	得宝 ×Pingu夏日联名系列上线，少女心被拿捏	图文	Tempo得宝	是	是	家居用品	https://www.xiaohongshu.com/discovery/item/6a157284000000003501ce0a	93	52	15	26	18			联名深耕（资讯版）	是	42944180652	27216	困慢薯	初级达人	 	https://www.xiaohongshu.com/user/profile/66d92684000000001d021858	http://app.qian-gua.com/#/blogger/detail/22114446/5c18bb	1067662110@qq.com	穿搭,明星娱乐资讯,潮流资讯,时尚其他,潮流艺术	2000
-2026-05-20 21:27:58	今天的粉色心情🎀	图文	Tempo得宝	isCommercial	是	香水	https://www.xiaohongshu.com/discovery/item/6a0dac8e000000003601dc54	74	52	14	8	5			一块盐	是	494759236	14274	铜冠薯	初级达人	浙江 杭州市	https://www.xiaohongshu.com/user/profile/5655d3e782ec391dbb7099e4	http://app.qian-gua.com/#/blogger/detail/5452152/02e5d7		穿搭,人文font风光展示,日常片段其他,美食其他,配饰	2100
+2026-05-20 21:27:58	今天的粉色心情🎀	图文	Tempo得宝	是	是	香水	https://www.xiaohongshu.com/discovery/item/6a0dac8e000000003601dc54	74	52	14	8	5			一块盐	是	494759236	14274	铜冠薯	初级达人	浙江 杭州市	https://www.xiaohongshu.com/user/profile/5655d3e782ec391dbb7099e4	http://app.qian-gua.com/#/blogger/detail/5452152/02e5d7		穿搭,人文font风光展示,日常片段其他,美食其他,配饰	2100
 2026-05-20 19:40:16	520杭州街头小浪漫✨悄然绽放的玫瑰惊喜	图文	Tempo得宝	是	是	穿搭	https://www.xiaohongshu.com/discovery/item/6a0d840500000000060237d2	71	49	7	15	2			Elephant是大象	是	607502810	18476	金冠薯	初级达人	 	https://www.xiaohongshu.com/user/profile/573536715e87e73c69725ce5	http://app.qian-gua.com/#/blogger/detail/4540517/87e1d4	443477262@qq.com	美食探店,美食其他,景点攻略,美食展示,去处	2400
 2026-05-26 19:17:22	甜晕！得宝 Pingu 柚子香纸巾惊喜上线✨	图文	Tempo得宝	是	是	个人护理其他	https://www.xiaohongshu.com/discovery/item/6a1575d2000000003802191f	69	37	12	20	17			联动界扛把子	是	11618144903	26565	困慢薯	初级达人	 	https://www.xiaohongshu.com/user/profile/66723e7b0000000007007934	http://app.qian-gua.com/#/blogger/detail/21823650/45b547	1067662110@qq.com	明星娱乐资讯,穿搭,时尚其他,配饰,彩妆其他	2000
 2026-05-15 20:45:11	大事很妙！得宝玫瑰纸送保时捷车模！附攻略！	图文	Tempo得宝	是	是	汽车其他	https://www.xiaohongshu.com/discovery/item/6a071389000000003501e7a1	63	33	8	22	41			小能(资讯版）	是	sss0113ooo	13137		初级达人	 	https://www.xiaohongshu.com/user/profile/5e65a3d6000000000100abc4	http://app.qian-gua.com/#/blogger/detail/23861326/3fda9f		潮流艺术,明星娱乐资讯,时尚其他,箱包,穿搭	1100
@@ -258,7 +258,36 @@ const xinXiangYinMayJune = `笔记发布时间	笔记标题	笔记形式	报备�
 2026-06-02 20:06:08	🧻沉浸式一巾多用：聪明人到底有多会过日子？	视频	心相印	是	是	家居用品	https://www.xiaohongshu.com/discovery/item/6a1ec16f0000000022023751	3626	2855	17	754	29			榴莲少女吴小美	是	Vmercyshaw	41570	金冠薯	初级达人	广东 广州市	https://www.xiaohongshu.com/user/profile/60f6aadd0000000001016dc6	http://app.qian-gua.com/#/blogger/detail/6653068/757405		家居用品,家居装饰,家居家装其他,家用电器,彩妆其他	4000
 2026-06-10 21:02:09	北大读研vlog🎾本学期最后一次在网球课暴汗	视频	心相印	是	是	运动	https://www.xiaohongshu.com/discovery/item/6a2950510000000035030d6a	3326	2983	36	307	59			阿萌今不是我	是	603907772	20058	金冠薯	初级达人	北京 北京市	https://www.xiaohongshu.com/user/profile/5b7d16466855df000167f93d	http://app.qian-gua.com/#/blogger/detail/6828386/ef1503	gym20021031@163.com	校园生活,人文font风光展示,视频素材,潮流资讯,穿搭	6000
 2026-06-03 11:03:32	沉浸式消耗补货🧩大促囤货不后悔的决定！	视频	心相印	是	是	家居用品	https://www.xiaohongshu.com/discovery/item/6a1f9984000000000702697f	3131	2743	81	307	15			甜橙不甜橙	是	581891056	19408	金冠薯	初级达人	江苏 无锡市	https://www.xiaohongshu.com/user/profile/5d00fc7d000000001600b885	http://app.qian-gua.com/#/blogger/detail/18289825/224892	1791990653@qq.com	家居用品,彩妆其他,个人护理其他,护肤其他,家居家装其他	2500
-2026-06-10 21:52:44	🚶女生一个人报名球局‼️出门需要多长时间…	视频	心相印	“是”	是	综合体育	https://www.xiaohongshu.com/discovery/item/6a2954c0000000002201aef9	3110	2625	98	387	32			辣丝er	是	6250514364	15326	金冠薯	初级达人	 	https://www.xiaohongshu.com/user/profile/634e6f1f00000000180296d9	http://app.qian-gua.com/#/blogger/detail/8595289/75a996	1282365594@qq.com	运动,综合体育,运动健身其他,穿搭,男士发型	6000
+2026-06-10 21:52:44	🚶女生一个人报名球局‼️出门需要多长时间…	视频	心相印	是	是	综合体育	https://www.xiaohongshu.com/discovery/item/6a2954c0000000002201aef9	3110	2625	98	387	32			辣丝er	是	6250514364	15326	金冠薯	初级达人	 	https://www.xiaohongshu.com/user/profile/634e6f1f00000000180296d9	http://app.qian-gua.com/#/blogger/detail/8595289/75a996	1282365594@qq.com	运动,综合体育,运动健身其他,穿搭,男士发型	6000
 2026-06-05 15:07:00	养肤还实用的多边形洗脸巾选手！	图文	心相印	是	是	个人护理其他	https://www.xiaohongshu.com/discovery/item/6a213b4300000000210223ea	2982	1924	90	968	0			胡萝卜胡了🥕	是	GX958930873	35756	金冠薯	初级达人	湖北 武汉市	https://www.xiaohongshu.com/user/profile/5eec1e080000000001002005	http://app.qian-gua.com/#/blogger/detail/20973541/0f4824		护肤其他,女性护理,彩妆其他,个人护理其他,家居用品	2000
 2026-06-08 13:32:16	听劝！生理期一定要用这样的湿厕纸！	图文	心相印	是	是	女性护理	https://www.xiaohongshu.com/discovery/item/6a26071300000000060344d1	2901	2075	7	819	0			鱼仔碎碎念	是	5078442088	22060	文化薯	初级达人	 	https://www.xiaohongshu.com/user/profile/63e0e6f20000000027037d48	http://app.qian-gua.com/#/blogger/detail/9007200/07a55d	3619388927@qq.com	女性护理,护肤其他	2000
-2026-06-11 19:04:25	告别臭毛巾 健身的清爽好物 ！！！	视频	心相印	是	是	个人护理其他	https://www.xiaohongshu.com/discovery/item/6a2a1c96000000001602651a	2264	1308	20	936	6			我叫陈美丽🤩	是	26742690383	103412	银冠薯	腰部达人	 	https://www.xiaohongshu.com/user/profile/6778c3cd0000000014033761	http://app.qian-gua.com/#/blogger/detail/28698515/f32a62	5725
+2026-06-11 19:04:25	告别臭毛巾 健身的清爽好物 ！！！	视频	心相印	是	是	个人护理其他	https://www.xiaohongshu.com/discovery/item/6a2a1c96000000001602651a	2264	1308	20	936	6			我叫陈美丽🤩	是	26742690383	103412	银冠薯	腰部达人	 	https://www.xiaohongshu.com/user/profile/6778c3cd0000000014033761	http://app.qian-gua.com/#/blogger/detail/28698515/f32a62	5725`;
+
+// ==========================================
+// 解析工具：将内置 TSV 模板字符串转换为分析所需的原始行（按表头键名映射）
+// ==========================================
+
+const parseSampleTSV = (tsv: string): any[] => {
+  const lines = tsv.trim().split('\n');
+  if (lines.length < 2) return [];
+  // 示例数据均为 Tab 分隔，按表头切分
+  const headers: string[] = lines[0].split('\t').map((h: string) => h.trim());
+  return lines.slice(1).map((line: string) => {
+    const values = line.split('\t');
+    const obj: any = {};
+    headers.forEach((h, i) => {
+      obj[h] = values[i] ? values[i].trim() : '';
+    });
+    return obj;
+  });
+};
+
+// 组合全部内置示例数据（得宝 4-6 月 + 心相印 4-6 月），供「体验示例数据」按钮一次性加载
+export function getSampleRawRows(): any[] {
+  return [
+    ...parseSampleTSV(tempoApril),
+    ...parseSampleTSV(tempoMayJune),
+    ...parseSampleTSV(xinXiangYinApril),
+    ...parseSampleTSV(xinXiangYinMayJune),
+  ];
+}
