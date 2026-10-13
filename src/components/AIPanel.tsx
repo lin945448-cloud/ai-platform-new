@@ -18,7 +18,8 @@ export const AIPanel: React.FC<Props> = ({ data, selectedCommercial, selectedBra
   const noteLabel = selectedCommercial === '全部' ? '全部性质' : selectedCommercial === '是' ? '仅商业笔记' : '仅非商业笔记';
   const brandLabel = selectedBrands.length === 0 ? '全部品牌' : selectedBrands.join('、');
   const timeLabel = selectedMonths.length === 0 ? '全部时间段' : selectedMonths.join('、');
-  const comparisonReady = analysisMode !== 'compare' || selectedBrands.length >= 2;
+  const modeReady = analysisMode === 'single' || analysisMode === 'compare';
+  const comparisonReady = modeReady && (analysisMode !== 'compare' || selectedBrands.length >= 2);
 
   useEffect(() => {
     requestIdRef.current += 1;
@@ -260,8 +261,8 @@ CPE、CPF 为 null 表示分母为零，无法计算；预估费用为零不能�
             <Sparkles size={16} className="text-white" />
           </div>
           <div>
-            <h2 className="text-sm font-bold text-slate-800">DeepSeek 商业洞察大脑</h2>
-            <p className="text-[10px] text-slate-400">联动多重筛选动态推理</p>
+            <h2 className="text-sm font-bold text-slate-800">投放效果分析</h2>
+            <p className="text-[10px] text-slate-400">单品牌分析与竞品对比</p>
           </div>
         </div>
         {messages.length > 0 && (
@@ -274,14 +275,15 @@ CPE、CPF 为 null 表示分母为零，无法计算；预估费用为零不能�
           <div className="flex flex-col items-center justify-center h-full text-center px-4">
             <Bot size={40} className="text-violet-200 mb-3" />
             <p className="text-sm font-bold text-slate-700 mb-1">AI 引擎准备就绪</p>
+            <p className="text-xs text-slate-500">当前模式：{analysisMode === 'compare' ? '竞品对比' : analysisMode === 'single' ? '单个分析' : '未配置'}</p>
             <button
               onClick={handleGenerateReport}
               disabled={data.totalNotes === 0 || !comparisonReady}
               className="mt-4 flex items-center gap-2 bg-slate-800 hover:bg-slate-900 disabled:bg-slate-300 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition-all shadow-md active:scale-95"
             >
-              <Sparkles size={16} /> 生成深度报告
+              <Sparkles size={16} /> {analysisMode === 'compare' ? '生成竞品分析报告' : '生成单个分析报告'}
             </button>
-            {!comparisonReady && <p className="mt-2 text-xs text-slate-500">请至少选择两个品牌进行竞品对比</p>}
+            {!modeReady ? <p className="mt-2 text-xs text-red-500">分析模式未传入，请检查 App.tsx 是否完整更新</p> : !comparisonReady && <p className="mt-2 text-xs text-slate-500">请至少选择两个品牌进行竞品对比</p>}
           </div>
         )}
 
